@@ -1,4 +1,4 @@
-name: Apply reference frame overlay
+name: Trace map mask from reference
 on:
   push:
     paths: ['.github/workflows/refine-map-mask.yml']
@@ -9,14 +9,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update page layering
+      - name: Install image tracing dependency
+        run: pip install opencv-python-headless
+      - name: Trace first black border around reference map
         run: |
-          sed -i -E 's/\.stage-bg\{position:absolute;z-index:1;/\.stage-bg{position:absolute;z-index:10;/' index.html
-          sed -i -E 's/\.map-shell\{position:absolute;z-index:12;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;clip-path:polygon\([^;]+\)/.map-shell{position:absolute;z-index:2;left:33.8%;top:19.0%;width:32.4%;height:58.5%;overflow:hidden;border-radius:48% 48% 45% 45% \/ 22% 22% 46% 46%/' index.html
-      - name: Save
+          python3 - <<'PY'
+          import cv2,re
+          from pathlib import Path
+          img=cv2.imread('reference.jpg')
+          if img is None: raise SystemExit('reference.jpg not found')
+          gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+          binary=(gray<60).astype('uint8')*255
+          contours,h=cv2.findContours(binary,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
+          cx,cy=img.shape[1]//2,int(img.shape[0]*.48)
+          candidates=[]
+          for c in contours:
+              area=abs(cv2.contourArea(c))
+              x,y,w,hh=cv2.boundingRect(c)
+              if area>150000 and 500<w<900 and 450<hh<800 and cv2.pointPolygonTest(c,(cx,cy),False)>=0:
+                  candidates.append((area,c))
+          if not candidates: raise SystemExit('inner black map border not detected')
+          c=max(candidates,key=lambda z:z[0])[1]
+          # Sub-pixel-tight approximation: keeps the actual black-band geometry,
+          # including the upper horns and the star transition at the bottom.
+          c=cv2.approxPolyDP(c,.30,True)
+          x,y,w,hh=cv2.boundingRect(c)
+          pts=[]
+          for p in c[:,0,:]:
+              px=(float(p[0])-x)/(w-1)*100
+              py=(float(p[1])-y)/(hh-1)*100
+              pts.append(f'{px:.4f}% {py:.4f}%')
+          clip='polygon('+','.join(pts)+')'
+          W,H=img.shape[1],img.shape[0]
+          css=(f'.map-shell{{position:absolute;z-index:12;left:{x/W*100:.5f}%;top:{y/H*100:.5f}%;'
+               f'width:{w/W*100:.5f}%;height:{hh/H*100:.5f}%;overflow:hidden;clip-path:{clip}')
+          p=Path('index.html'); s=p.read_text()
+          pattern=r'\.map-shell\{position:absolute;z-index:[^;]+;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;(?:clip-path:polygon\([^;]+\)|border-radius:[^}]+)'
+          s,n=re.subn(pattern,css,s,count=1)
+          if n!=1: raise SystemExit('map-shell CSS not found')
+          # Reference stays behind the interactive map; the traced border itself is the mask.
+          s=re.sub(r'\.stage-bg\{position:absolute;z-index:\d+;', '.stage-bg{position:absolute;z-index:1;', s, count=1)
+          p.write_text(s)
+          print('mask bbox',x,y,w,hh,'points',len(c))
+          PY
+      - name: Save traced mask
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add index.html
-          git commit -m 'Place interactive map behind reference frame'
+          git commit -m 'Apply map mask traced from reference black border'
           git push
