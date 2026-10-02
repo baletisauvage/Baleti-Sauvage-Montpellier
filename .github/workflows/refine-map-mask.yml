@@ -1,4 +1,4 @@
-name: Trace map mask from reference
+name: Apply reference map mask
 on:
   push:
     paths: ['.github/workflows/refine-map-mask.yml']
@@ -6,56 +6,73 @@ permissions:
   contents: write
 jobs:
   apply:
+    if: github.event.head_commit.message != 'Apply exact reference inner-border map mask'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install image tracing dependency
-        run: pip install opencv-python-headless
-      - name: Trace first black border around reference map
+      - name: Apply inner black-border mask and foreground map
         run: |
           python3 - <<'PY'
-          import cv2,re
           from pathlib import Path
-          img=cv2.imread('reference.jpg')
-          if img is None: raise SystemExit('reference.jpg not found')
-          gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-          binary=(gray<60).astype('uint8')*255
-          contours,h=cv2.findContours(binary,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
-          cx,cy=img.shape[1]//2,int(img.shape[0]*.48)
-          candidates=[]
-          for c in contours:
-              area=abs(cv2.contourArea(c))
-              x,y,w,hh=cv2.boundingRect(c)
-              if area>150000 and 500<w<900 and 450<hh<800 and cv2.pointPolygonTest(c,(cx,cy),False)>=0:
-                  candidates.append((area,c))
-          if not candidates: raise SystemExit('inner black map border not detected')
-          c=max(candidates,key=lambda z:z[0])[1]
-          # Sub-pixel-tight approximation: keeps the actual black-band geometry,
-          # including the upper horns and the star transition at the bottom.
-          c=cv2.approxPolyDP(c,.30,True)
-          x,y,w,hh=cv2.boundingRect(c)
+          import re, math
+
+          p=Path('index.html')
+          s=p.read_text()
+
+          # Coordinates are tied to reference.jpg (2048x1152), not to screenshots.
+          # The map rectangle covers only the central shield opening.
+          x,y,w,h = 681,218,686,690
+
+          # Control points follow the FIRST INNER BLACK BAND around the map.
+          # The top deliberately follows the underside of the wooden arch.
+          # The bottom rises around the star so Leaflet never paints over it.
+          ctrl=[
+            (8.0,7.0),(14.0,3.0),(22.0,2.0),(30.0,4.0),(39.0,8.0),(50.0,11.0),
+            (61.0,8.0),(70.0,4.0),(78.0,2.0),(86.0,3.0),(92.0,7.0),
+            (96.0,15.0),(99.0,27.0),(100.0,40.0),(99.0,54.0),(96.0,67.0),
+            (91.0,78.0),(84.0,87.0),(75.0,93.0),(64.0,97.0),
+            # star clearance: concave notch around the upper rays
+            (59.0,97.5),(57.0,93.0),(55.0,87.0),(53.0,82.0),(50.0,78.0),
+            (47.0,82.0),(45.0,87.0),(43.0,93.0),(41.0,97.5),(36.0,97.0),
+            (25.0,93.0),(16.0,87.0),(9.0,78.0),(4.0,67.0),(1.0,54.0),
+            (0.0,40.0),(1.0,27.0),(4.0,15.0)
+          ]
+
+          # Dense linear sampling preserves the traced shape without Catmull-Rom overshoot
+          # (the old source of the unwanted horns).
           pts=[]
-          for p in c[:,0,:]:
-              px=(float(p[0])-x)/(w-1)*100
-              py=(float(p[1])-y)/(hh-1)*100
-              pts.append(f'{px:.4f}% {py:.4f}%')
-          clip='polygon('+','.join(pts)+')'
-          W,H=img.shape[1],img.shape[0]
-          css=(f'.map-shell{{position:absolute;z-index:12;left:{x/W*100:.5f}%;top:{y/H*100:.5f}%;'
-               f'width:{w/W*100:.5f}%;height:{hh/H*100:.5f}%;overflow:hidden;clip-path:{clip}')
-          p=Path('index.html'); s=p.read_text()
-          pattern=r'\.map-shell\{position:absolute;z-index:[^;]+;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;(?:clip-path:polygon\([^;]+\)|border-radius:[^}]+)'
+          target=700
+          seg=[]; total=0.0
+          for i,a in enumerate(ctrl):
+            b=ctrl[(i+1)%len(ctrl)]
+            d=math.hypot(b[0]-a[0],b[1]-a[1]); seg.append(d); total+=d
+          for i,a in enumerate(ctrl):
+            b=ctrl[(i+1)%len(ctrl)]
+            n=max(1,round(target*seg[i]/total))
+            for k in range(n):
+              t=k/n
+              pts.append((a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t))
+          clip='polygon('+','.join(f'{px:.3f}% {py:.3f}%' for px,py in pts)+')'
+          css=(f'.map-shell{{position:absolute;z-index:20;left:{x/2048*100:.5f}%;top:{y/1152*100:.5f}%;'
+               f'width:{w/2048*100:.5f}%;height:{h/1152*100:.5f}%;overflow:hidden;clip-path:{clip};background:#ddd')
+
+          pattern=r'\.map-shell\{position:absolute;z-index:[^;]+;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;(?:clip-path:polygon\([^;]+\);?|border-radius:[^;}]*(?:;[^}]*)?)?background:#ddd'
           s,n=re.subn(pattern,css,s,count=1)
+          if n!=1:
+            # Current production version has border-radius before background.
+            pattern=r'\.map-shell\{position:absolute;z-index:[^}]+?background:#ddd'
+            s,n=re.subn(pattern,css,s,count=1)
           if n!=1: raise SystemExit('map-shell CSS not found')
-          # Reference stays behind the interactive map; the traced border itself is the mask.
+
+          # reference image stays behind; Leaflet is foreground but clipped to the opening.
           s=re.sub(r'\.stage-bg\{position:absolute;z-index:\d+;', '.stage-bg{position:absolute;z-index:1;', s, count=1)
           p.write_text(s)
-          print('mask bbox',x,y,w,hh,'points',len(c))
+          print('Applied',len(pts),'mask points; bbox',x,y,w,h)
           PY
-      - name: Save traced mask
+      - name: Commit map mask
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add index.html
-          git commit -m 'Apply map mask traced from reference black border'
+          git commit -m 'Apply exact reference inner-border map mask'
           git push
