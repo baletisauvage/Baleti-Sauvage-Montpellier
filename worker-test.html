@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test Worker — Balèti Sauvage</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:720px;margin:60px auto;padding:20px;background:#111;color:#fff} .box{padding:24px;border-radius:16px;background:#222} .ok{color:#7ee787}.bad{color:#ff7b72} code{word-break:break-all}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>Connexion Worker</h1>
+<p id="status">Test en cours…</p>
+<p><code>https://baleti-sauvage.baletisauvage.workers.dev/</code></p>
+<pre id="result"></pre>
+</div>
+<script>
+const WORKER='https://baleti-sauvage.baletisauvage.workers.dev/';
+(async()=>{
+ const status=document.getElementById('status'), result=document.getElementById('result');
+ try{
+  const r=await fetch(WORKER,{cache:'no-store'});
+  const data=await r.json();
+  if(!r.ok||data.ok!==true) throw new Error('Réponse inattendue du Worker');
+  status.className='ok'; status.textContent='✓ GitHub Pages communique bien avec le Worker.';
+  result.textContent=JSON.stringify(data,null,2);
+ }catch(e){
+  status.className='bad'; status.textContent='✗ Connexion impossible.';
+  result.textContent=String(e);
+ }
+})();
+</script>
+</body>
+</html>
