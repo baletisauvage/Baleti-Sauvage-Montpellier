@@ -1,59 +1,22 @@
-name: Trace real map opening
+name: Apply reference frame overlay
 on:
   push:
-    paths:
-      - '.github/workflows/refine-map-mask.yml'
+    paths: ['.github/workflows/refine-map-mask.yml']
 permissions:
   contents: write
 jobs:
-  refine:
-    if: github.event.head_commit.message != 'Apply traced inner crest map opening'
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Trace the actual inner wooden opening
+      - name: Update page layering
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re, math
-          p=Path('index.html')
-          s=p.read_text()
-          # Geometry traced from the supplied 525x435 screenshot. The 16:9 stage is
-          # 773.33x435 in that viewport and is horizontally cropped by ~124px.
-          # Bounding box in stage percentages: x=21.55..69.96%, y=11.72..89.43%.
-          # Points below are relative to that box and follow the INNER wood edge.
-          # The central bottom notch deliberately rises around the compass star.
-          pts=[
-            (18.5,1.8),(24.5,3.8),(31.0,5.8),(39.0,7.0),(50.0,7.6),(61.0,7.0),(69.0,5.8),(75.5,3.8),(81.5,1.8),
-            (86.5,7.0),(91.5,14.0),(95.2,23.0),(97.7,34.0),(99.0,47.0),(98.6,60.0),(96.5,71.0),(92.0,80.0),(85.5,87.0),(77.0,92.0),(68.0,95.5),(61.0,97.0),
-            (57.0,96.8),(54.0,95.2),(52.2,92.5),(50.0,89.5),(47.8,92.5),(46.0,95.2),(43.0,96.8),(39.0,97.0),(32.0,95.5),(23.0,92.0),(14.5,87.0),(8.0,80.0),(3.5,71.0),(1.4,60.0),(1.0,47.0),(2.3,34.0),(4.8,23.0),(8.5,14.0),(13.5,7.0)
-          ]
-          # Densify to 1000 points without spline overshoot/horns.
-          seg=[]; total=0.0
-          for i,a in enumerate(pts):
-              b=pts[(i+1)%len(pts)]
-              d=math.hypot(b[0]-a[0],b[1]-a[1]); seg.append(d); total+=d
-          out=[]
-          for k in range(1000):
-              target=k*total/1000; acc=0.0
-              for i,d in enumerate(seg):
-                  if target <= acc+d or i==len(seg)-1:
-                      a=pts[i]; b=pts[(i+1)%len(pts)]; t=(target-acc)/d if d else 0
-                      out.append(f'{a[0]+(b[0]-a[0])*t:.3f}% {a[1]+(b[1]-a[1])*t:.3f}%')
-                      break
-                  acc+=d
-          clip='clip-path:polygon('+','.join(out)+')'
-          replacement='.map-shell{position:absolute;z-index:12;left:21.55%;top:11.72%;width:48.41%;height:77.71%;overflow:hidden;'+clip
-          # Replace only the map-shell prefix and its existing clip-path.
-          pat=r'\.map-shell\{position:absolute;z-index:12;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;clip-path:polygon\([^;]+\)'
-          s2,n=re.subn(pat,replacement,s,count=1)
-          if n != 1: raise SystemExit('map-shell geometry not found')
-          p.write_text(s2)
-          PY
-      - name: Commit traced opening
+          sed -i -E 's/\.stage-bg\{position:absolute;z-index:1;/\.stage-bg{position:absolute;z-index:10;/' index.html
+          sed -i -E 's/\.map-shell\{position:absolute;z-index:12;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;clip-path:polygon\([^;]+\)/.map-shell{position:absolute;z-index:2;left:33.8%;top:19.0%;width:32.4%;height:58.5%;overflow:hidden;border-radius:48% 48% 45% 45% \/ 22% 22% 46% 46%/' index.html
+      - name: Save
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name github-actions
+          git config user.email github-actions@github.com
           git add index.html
-          git commit -m 'Apply traced inner crest map opening'
+          git commit -m 'Place interactive map behind reference frame'
           git push
