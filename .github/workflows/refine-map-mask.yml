@@ -1,4 +1,4 @@
-name: Refine map mask 1000
+name: Trace real map opening
 on:
   push:
     paths:
@@ -7,53 +7,53 @@ permissions:
   contents: write
 jobs:
   refine:
-    if: github.event.head_commit.message != 'Apply 1000-point map mask without horns and with star notch'
+    if: github.event.head_commit.message != 'Apply traced inner crest map opening'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate precise 1000-point contour
+      - name: Trace the actual inner wooden opening
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re, math
           p=Path('index.html')
           s=p.read_text()
-          # Explicit contour around the INNER wooden opening.
-          # Top shoulders are kept below the wooden horns; bottom has a concave notch
-          # that rises around the decorative star instead of crossing it.
+          # Geometry traced from the supplied 525x435 screenshot. The 16:9 stage is
+          # 773.33x435 in that viewport and is horizontally cropped by ~124px.
+          # Bounding box in stage percentages: x=21.55..69.96%, y=11.72..89.43%.
+          # Points below are relative to that box and follow the INNER wood edge.
+          # The central bottom notch deliberately rises around the compass star.
           pts=[
-            (23.0,1.8),(28.0,3.6),(34.0,5.8),(41.0,7.2),(50.0,7.9),(59.0,7.2),(66.0,5.8),(72.0,3.6),(77.0,1.8),
-            (78.2,6.8),(82.0,9.3),(87.0,12.1),(91.3,15.7),(94.7,20.2),(97.1,25.8),(98.6,32.5),(99.0,40.0),(98.8,48.8),
-            (97.5,57.0),(95.0,64.5),(91.4,71.3),(86.7,77.2),(81.0,82.5),(74.5,86.8),(67.0,90.2),(61.0,92.0),
-            (57.0,92.8),(54.0,92.6),(52.2,91.5),(51.2,89.4),(50.0,87.7),(48.8,89.4),(47.8,91.5),(46.0,92.6),(43.0,92.8),
-            (39.0,92.0),(33.0,90.2),(25.5,86.8),(19.0,82.5),(13.3,77.2),(8.6,71.3),(5.0,64.5),(2.5,57.0),(1.2,48.8),
-            (1.0,40.0),(1.4,32.5),(2.9,25.8),(5.3,20.2),(8.7,15.7),(13.0,12.1),(18.0,9.3),(21.8,6.8)
+            (18.5,1.8),(24.5,3.8),(31.0,5.8),(39.0,7.0),(50.0,7.6),(61.0,7.0),(69.0,5.8),(75.5,3.8),(81.5,1.8),
+            (86.5,7.0),(91.5,14.0),(95.2,23.0),(97.7,34.0),(99.0,47.0),(98.6,60.0),(96.5,71.0),(92.0,80.0),(85.5,87.0),(77.0,92.0),(68.0,95.5),(61.0,97.0),
+            (57.0,96.8),(54.0,95.2),(52.2,92.5),(50.0,89.5),(47.8,92.5),(46.0,95.2),(43.0,96.8),(39.0,97.0),(32.0,95.5),(23.0,92.0),(14.5,87.0),(8.0,80.0),(3.5,71.0),(1.4,60.0),(1.0,47.0),(2.3,34.0),(4.8,23.0),(8.5,14.0),(13.5,7.0)
           ]
-          # Densify linearly by arc length. Linear interpolation is intentional:
-          # unlike Catmull-Rom it cannot overshoot and create artificial horns.
+          # Densify to 1000 points without spline overshoot/horns.
           seg=[]; total=0.0
           for i,a in enumerate(pts):
               b=pts[(i+1)%len(pts)]
               d=math.hypot(b[0]-a[0],b[1]-a[1]); seg.append(d); total+=d
-          out=[]; n=1000
-          for k in range(n):
-              target=k*total/n; acc=0.0
+          out=[]
+          for k in range(1000):
+              target=k*total/1000; acc=0.0
               for i,d in enumerate(seg):
                   if target <= acc+d or i==len(seg)-1:
-                      a=pts[i]; b=pts[(i+1)%len(pts)]; t=0 if d==0 else (target-acc)/d
-                      x=a[0]+(b[0]-a[0])*t; y=a[1]+(b[1]-a[1])*t
-                      out.append(f'{x:.3f}% {y:.3f}%'); break
+                      a=pts[i]; b=pts[(i+1)%len(pts)]; t=(target-acc)/d if d else 0
+                      out.append(f'{a[0]+(b[0]-a[0])*t:.3f}% {a[1]+(b[1]-a[1])*t:.3f}%')
+                      break
                   acc+=d
-          new='clip-path:polygon('+','.join(out)+')'
-          pat=r'(?<=\.map-shell\{position:absolute;z-index:12;left:33\.50%;top:17\.89%;width:33\.01%;height:58\.62%;overflow:hidden;)clip-path:polygon\([^;]+\)'
-          s2,nsub=re.subn(pat,new,s,count=1)
-          if nsub != 1: raise SystemExit('Current map-shell clip path not found; index left unchanged')
+          clip='clip-path:polygon('+','.join(out)+')'
+          replacement='.map-shell{position:absolute;z-index:12;left:21.55%;top:11.72%;width:48.41%;height:77.71%;overflow:hidden;'+clip
+          # Replace only the map-shell prefix and its existing clip-path.
+          pat=r'\.map-shell\{position:absolute;z-index:12;left:[^;]+;top:[^;]+;width:[^;]+;height:[^;]+;overflow:hidden;clip-path:polygon\([^;]+\)'
+          s2,n=re.subn(pat,replacement,s,count=1)
+          if n != 1: raise SystemExit('map-shell geometry not found')
           p.write_text(s2)
           PY
-      - name: Commit precise mask
+      - name: Commit traced opening
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Apply 1000-point map mask without horns and with star notch'
+          git commit -m 'Apply traced inner crest map opening'
           git push
