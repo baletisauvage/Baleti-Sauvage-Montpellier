@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Balèti Sauvage Montpellier — V1</title>
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3yn5lXhZkRtrwq9KjMZ3Z8YJv5Q+0=" crossorigin="">
+<style>
+:root{--paper:#f6e6bd;--ink:#17130d;--red:#b91d19;--green:#173d2b;--gold:#d8a84b}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#111;font-family:Georgia,serif;color:var(--ink)}
+body{display:grid;place-items:center;overflow-x:hidden}.stage{position:relative;width:min(100vw,177.586vh);aspect-ratio:1648/928;background:url('reference.jpg') center/100% 100% no-repeat;overflow:hidden}
+.admin-access{position:absolute;z-index:50;right:1.3%;top:2%;width:46px;height:46px;border:2px solid #111;border-radius:50%;background:#f7e9c6;box-shadow:0 3px 12px #0008;cursor:pointer;font-size:20px}
+.map-shell{position:absolute;z-index:12;left:33.7%;top:19.1%;width:32.7%;height:55.7%;clip-path:polygon(50% 0,91% 7%,100% 31%,95% 66%,78% 91%,50% 100%,22% 91%,5% 66%,0 31%,9% 7%);filter:drop-shadow(0 2px 2px #0008)}
+#map{width:100%;height:100%;background:#e8e0cc}.leaflet-control-attribution{font-size:8px!important}.leaflet-control-zoom{margin-top:48px!important}
+.radius-note{position:absolute;z-index:450;left:50%;bottom:4%;transform:translateX(-50%);padding:4px 9px;border-radius:999px;background:#fffde8e8;border:1px solid #111;font:700 clamp(8px,1vw,13px) Arial,sans-serif;white-space:nowrap;pointer-events:none}
+.hotspot{position:absolute;z-index:30;border:0;border-radius:50%;background:transparent;cursor:pointer;padding:0;color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;text-transform:uppercase}
+.hotspot:focus-visible{outline:4px solid #fff;outline-offset:3px}.hotspot:hover{filter:drop-shadow(0 0 8px #fff)}
+.hotspot span{position:absolute;left:13%;right:13%;bottom:13%;display:grid;place-items:center;min-height:27%;padding:0 2%;background:#f4e5b8;border-radius:0 0 999px 999px;font-size:clamp(8px,1.28vw,22px);line-height:.95}
+.photos{left:28.6%;top:10.9%;width:12.7%;height:22.6%}.baleti{left:59.6%;top:10.9%;width:12.7%;height:22.6%}.videos{left:22.9%;top:39.6%;width:12.7%;height:22.6%}.suivre{left:65.2%;top:39.6%;width:12.7%;height:22.6%}.liens{left:28.9%;top:65.5%;width:12.7%;height:22.6%}.messages{left:59.2%;top:65.5%;width:12.7%;height:22.6%}
+.baleti span{font-size:clamp(7px,1.02vw,17px)}
+.next-pin{background:transparent;border:0}.pin-card{position:relative;transform:translate(-50%,-100%);min-width:150px;padding:8px 10px 12px;background:#111;color:#fff;border:3px solid #f5e5b8;border-radius:16px 16px 16px 4px;box-shadow:0 4px 12px #0007;text-align:center;font:900 13px/1.05 Arial,sans-serif}.pin-card:after{content:'';position:absolute;left:50%;bottom:-18px;transform:translateX(-50%);border:10px solid transparent;border-top-color:#111}.pin-card strong{display:block;font-size:14px}.pin-card em{display:block;margin-top:3px;font-style:normal;font-size:16px;color:#f7d270}
+.modal{position:fixed;z-index:1000;inset:0;display:none;place-items:center;padding:20px;background:#000a}.modal.open{display:grid}.panel{position:relative;width:min(680px,94vw);max-height:88vh;overflow:auto;padding:28px;border:4px solid #17130d;border-radius:24px;background:#f5e5bd;box-shadow:0 20px 70px #000b}.panel h2{margin:0 45px 18px 0;font-size:clamp(24px,5vw,42px)}.close{position:absolute;right:14px;top:12px;width:40px;height:40px;border:2px solid #111;border-radius:50%;background:#fff7df;font-size:25px;cursor:pointer}.baleti-panel{background:linear-gradient(#f6e6bdde,#f6e6bdde),url('reference.jpg') center/cover}.baleti-text{padding:18px;background:#fff9e9dc;border-radius:15px;line-height:1.65}.link-row{display:block;margin:10px 0;padding:13px 16px;border:2px solid #111;border-radius:12px;background:#fff8e7;color:#111;text-decoration:none;font-weight:700}.muted{opacity:.72}.admin-grid{display:grid;gap:12px}.admin-card{padding:14px;border:2px solid #111;border-radius:15px;background:#fff9e8}.admin-card label{display:block;font:700 13px Arial;margin:9px 0 4px}.admin-card input,.admin-card textarea,.admin-card select{width:100%;padding:10px;border:1px solid #777;border-radius:8px;font:16px Arial}.admin-card button{margin-top:10px;padding:10px 13px;border:2px solid #111;border-radius:10px;background:#f5e5bd;font-weight:800;cursor:pointer}.mode{display:flex;gap:8px}.mode button{flex:1}.mode button.active{background:#111;color:#fff}.summary{font:800 18px/1.35 Arial}.notice{padding:10px;border-left:5px solid var(--red);background:#fff4df}.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.photo-grid div{aspect-ratio:1;background:#ddd center/cover}.simple-form{display:grid;gap:10px}.simple-form input,.simple-form textarea{padding:11px;border:1px solid #777;border-radius:8px;font:16px Arial}.simple-form button{padding:11px;border:2px solid #111;border-radius:10px;background:#111;color:#fff;font-weight:800}
+@media(max-width:760px){body{display:block;background:#111}.stage{width:100vw;height:auto;min-height:56.3vw}.admin-access{width:36px;height:36px;font-size:16px}.hotspot span{font-family:Arial,sans-serif;font-weight:900}.radius-note{display:none}.leaflet-control-zoom{display:none}.pin-card{min-width:105px;padding:5px 6px 8px;font-size:9px}.pin-card strong{font-size:10px}.pin-card em{font-size:11px}}
+</style>
+</head>
+<body>
+<main class="stage" aria-label="Balèti Sauvage Montpellier">
+  <button class="admin-access" id="adminOpen" title="Administration" aria-label="Administration">🔒</button>
+  <div class="map-shell"><div id="map"></div><div class="radius-note">zone : 1 km autour de la place des Martyrs de la Résistance</div></div>
+  <button class="hotspot photos" data-modal="photosModal" aria-label="Photos"><span>Photos</span></button>
+  <button class="hotspot baleti" data-modal="baletiModal" aria-label="Balèti Sauvage"><span>Balèti Sauvage</span></button>
+  <button class="hotspot videos" data-modal="videosModal" aria-label="Vidéos"><span>Vidéos</span></button>
+  <button class="hotspot suivre" data-modal="suivreModal" aria-label="Suivre"><span>Suivre</span></button>
+  <button class="hotspot liens" data-modal="liensModal" aria-label="Liens"><span>Liens</span></button>
+  <button class="hotspot messages" data-modal="messagesModal" aria-label="Messages"><span>Messages</span></button>
+</main>
+
+<div class="modal" id="baletiModal"><section class="panel baleti-panel"><button class="close">×</button><h2>Balèti Sauvage</h2><div class="baleti-text" id="publicBaletiText">Le texte de présentation sera modifiable depuis l’administration.</div></section></div>
+<div class="modal" id="photosModal"><section class="panel"><button class="close">×</button><h2>Photos</h2><p>Cette fenêtre reprendra la galerie Photos d’A’Cha Lou, avec les photos originales et la même logique d’administration.</p><div class="notice">V1 : emplacement fonctionnel préparé ; connexion au manifeste Photos à faire lors du branchement du Worker.</div></section></div>
+<div class="modal" id="videosModal"><section class="panel"><button class="close">×</button><h2>Vidéos</h2><p>Cette fenêtre reprendra la vidéothèque d’A’Cha Lou et sa gestion administrateur.</p><div class="notice">V1 : emplacement fonctionnel préparé ; connexion aux vidéos à faire lors du branchement du Worker.</div></section></div>
+<div class="modal" id="suivreModal"><section class="panel"><button class="close">×</button><h2>Suivre</h2><p class="muted">Fonction volontairement laissée en attente, comme décidé.</p></section></div>
+<div class="modal" id="liensModal"><section class="panel"><button class="close">×</button><h2>Liens</h2><div id="publicLinks"></div></section></div>
+<div class="modal" id="messagesModal"><section class="panel"><button class="close">×</button><h2>Messages</h2><form class="simple-form" onsubmit="event.preventDefault();alert('V1 : le formulaire sera relié au même système Messages que A’Cha Lou.');"><input placeholder="Votre nom"><input type="email" placeholder="Votre e-mail"><textarea rows="5" placeholder="Votre message"></textarea><button>Envoyer</button></form></section></div>
+
+<div class="modal" id="adminModal"><section class="panel"><button class="close">×</button><h2>Administration — V1</h2><div class="admin-grid">
+  <div class="admin-card"><strong>PROCHAIN BALÈTI</strong><div class="summary" id="adminSummary"></div><div class="mode"><button id="modeThu">JEUDI 21H30</button><button id="modeSun">DIMANCHE 14H</button></div></div>
+  <div class="admin-card"><strong>Programme habituel</strong><label>Nom du lieu habituel</label><input id="usualPlace"><label>Latitude</label><input id="usualLat" type="number" step="0.000001"><label>Longitude</label><input id="usualLng" type="number" step="0.000001"><button id="saveUsual">Enregistrer le programme habituel</button></div>
+  <div class="admin-card"><strong>Modifier ce Balèti uniquement</strong><label>Heure exceptionnelle</label><input id="overrideTime" type="time"><label>Lieu exceptionnel</label><input id="overridePlace"><label>Latitude exceptionnelle</label><input id="overrideLat" type="number" step="0.000001"><label>Longitude exceptionnelle</label><input id="overrideLng" type="number" step="0.000001"><label>Commentaire</label><textarea id="overrideComment" rows="3"></textarea><label><input id="overrideCancelled" type="checkbox" style="width:auto"> Balèti annulé</label><button id="saveOverride">Enregistrer pour cette date</button><button id="clearOverride">Revenir au programme habituel</button></div>
+  <div class="admin-card"><strong>Présentation Balèti Sauvage</strong><label>Texte public</label><textarea id="adminBaletiText" rows="6"></textarea><button id="saveBaletiText">Enregistrer le texte</button></div>
+  <div class="admin-card"><strong>Liens</strong><div id="adminLinks"></div><button id="addLink">Ajouter un lien</button></div>
+  <div class="admin-card"><strong>Photos · Vidéos · Messages</strong><p>Dans la version reliée au Worker, ces trois rubriques conserveront les fonctions d’administration A’Cha Lou.</p></div>
+</div></section></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const CENTER=[43.6108225,3.8766489], RADIUS=1000;
+const defaults={mode:'thu',usualPlace:'Place des Martyrs de la Résistance',usualLat:CENTER[0],usualLng:CENTER[1],baletiText:'Le texte de présentation du Balèti Sauvage sera affiché ici. Il pourra être modifié directement depuis l’administration.',links:[{title:'Exemple de lien',url:'https://example.org'}],override:null};
+let state=Object.assign({},defaults,JSON.parse(localStorage.getItem('baleti-v1')||'{}'));
+function persist(){localStorage.setItem('baleti-v1',JSON.stringify(state));renderAll()}
+function nextDate(){const now=new Date();const day=state.mode==='sun'?0:4;const hm=state.mode==='sun'?[14,0]:[21,30];let d=new Date(now);d.setHours(hm[0],hm[1],0,0);let delta=(day-d.getDay()+7)%7;if(delta===0 && d<=now)delta=7;d.setDate(d.getDate()+delta);return d}
+function fmtDate(d){return new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long'}).format(d)}
+function currentEvent(){const d=nextDate(),o=state.override||{};return{date:d,time:o.time||(state.mode==='sun'?'14:00':'21:30'),place:o.place||state.usualPlace,lat:Number(o.lat||state.usualLat),lng:Number(o.lng||state.usualLng),comment:o.comment||'',cancelled:!!o.cancelled}}
+const map=L.map('map',{zoomControl:true,attributionControl:true,minZoom:14,maxZoom:18}).setView(CENTER,16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+L.circle(CENTER,{radius:RADIUS,color:'#111',weight:1,fill:false,dashArray:'5,7',opacity:.35}).addTo(map);
+const bounds=L.latLng(CENTER).toBounds(RADIUS*2.15);map.setMaxBounds(bounds);map.on('drag',()=>map.panInsideBounds(bounds,{animate:false}));
+let marker;
+function pinIcon(ev){const title=ev.cancelled?'BALÈTI ANNULÉ':'PROCHAIN BALÈTI';return L.divIcon({className:'next-pin',iconSize:[1,1],iconAnchor:[0,0],html:`<div class="pin-card"><strong>${title}</strong>${fmtDate(ev.date).toUpperCase()}<em>${ev.time.replace(':','H')}</em></div>`})}
+function renderMap(){const ev=currentEvent();if(marker)marker.remove();marker=L.marker([ev.lat,ev.lng],{icon:pinIcon(ev)}).addTo(map);marker.bindPopup(`<strong>${ev.place}</strong>${ev.comment?'<br>'+ev.comment:''}`);map.setView([ev.lat,ev.lng],16,{animate:false})}
+function renderLinks(){document.getElementById('publicLinks').innerHTML=(state.links||[]).map(x=>`<a class="link-row" href="${x.url}" target="_blank" rel="noopener">${x.title}</a>`).join('')||'<p>Aucun lien pour le moment.</p>';document.getElementById('adminLinks').innerHTML=(state.links||[]).map((x,i)=>`<div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:6px;margin:7px 0"><input data-lt="${i}" value="${x.title.replaceAll('"','&quot;')}"><input data-lu="${i}" value="${x.url.replaceAll('"','&quot;')}"><button data-ld="${i}" style="margin:0">×</button></div>`).join('')}
+function renderAll(){const ev=currentEvent();document.getElementById('publicBaletiText').textContent=state.baletiText;document.getElementById('adminBaletiText').value=state.baletiText;document.getElementById('usualPlace').value=state.usualPlace;document.getElementById('usualLat').value=state.usualLat;document.getElementById('usualLng').value=state.usualLng;document.getElementById('modeThu').classList.toggle('active',state.mode==='thu');document.getElementById('modeSun').classList.toggle('active',state.mode==='sun');document.getElementById('adminSummary').innerHTML=`${ev.cancelled?'ANNULÉ — ':''}${fmtDate(ev.date)} — ${ev.time}<br>${ev.place}`;const o=state.override||{};overrideTime.value=o.time||'';overridePlace.value=o.place||'';overrideLat.value=o.lat||'';overrideLng.value=o.lng||'';overrideComment.value=o.comment||'';overrideCancelled.checked=!!o.cancelled;renderLinks();renderMap()}
+document.querySelectorAll('[data-modal]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.modal).classList.add('open'));document.getElementById('adminOpen').onclick=()=>adminModal.classList.add('open');document.querySelectorAll('.close').forEach(b=>b.onclick=()=>b.closest('.modal').classList.remove('open'));document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+modeThu.onclick=()=>{state.mode='thu';state.override=null;persist()};modeSun.onclick=()=>{state.mode='sun';state.override=null;persist()};
+saveUsual.onclick=()=>{state.usualPlace=usualPlace.value.trim()||defaults.usualPlace;state.usualLat=Number(usualLat.value)||CENTER[0];state.usualLng=Number(usualLng.value)||CENTER[1];persist()};
+saveOverride.onclick=()=>{state.override={time:overrideTime.value,place:overridePlace.value.trim(),lat:overrideLat.value,lng:overrideLng.value,comment:overrideComment.value.trim(),cancelled:overrideCancelled.checked};persist()};clearOverride.onclick=()=>{state.override=null;persist()};
+saveBaletiText.onclick=()=>{state.baletiText=adminBaletiText.value.trim();persist()};
+addLink.onclick=()=>{state.links=[...(state.links||[]),{title:'Nouveau lien',url:'https://'}];persist()};adminLinks.addEventListener('change',e=>{const i=Number(e.target.dataset.lt??e.target.dataset.lu);if(Number.isInteger(i)){if(e.target.dataset.lt!==undefined)state.links[i].title=e.target.value;if(e.target.dataset.lu!==undefined)state.links[i].url=e.target.value;persist()}});adminLinks.addEventListener('click',e=>{if(e.target.dataset.ld!==undefined){state.links.splice(Number(e.target.dataset.ld),1);persist()}});
+renderAll();setTimeout(()=>map.invalidateSize(),250);
+</script>
+</body></html>
