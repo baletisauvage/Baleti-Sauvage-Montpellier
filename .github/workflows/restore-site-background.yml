@@ -1,0 +1,31 @@
+name: Restore site background
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-site-background.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore color background
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          old="body{margin:0;min-height:calc(100vh - 20px);font-family:Arial,sans-serif;color:#fff;border:8px solid #000;background:#000}body:before{content:'';position:fixed;inset:0;z-index:-1;background:url('assets/site-bg.jpg') center/cover no-repeat;filter:grayscale(100%)}"
+          new="body{margin:0;min-height:calc(100vh - 20px);font-family:Arial,sans-serif;color:#fff;border:8px solid #000;background:url('assets/site-bg.jpg') center/cover fixed no-repeat}"
+          if old not in s:
+              raise SystemExit('Monochrome background code not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit
+        run: |
+          git config user.name baletisauvage
+          git config user.email baletisauvage@gmail.com
+          git add index.html
+          git commit -m "Restore full color site background"
+          git push
