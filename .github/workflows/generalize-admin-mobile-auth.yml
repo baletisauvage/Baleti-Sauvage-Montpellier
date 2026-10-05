@@ -1,0 +1,38 @@
+name: Generaliser authentification admin mobile
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/generalize-admin-mobile-auth.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generaliser la session admin a toutes les pages
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          marker='data-baleti-admin-auth="1"'
+          script='''<script data-baleti-admin-auth="1">(()=>{const K="baleti_admin_token",F=window.fetch.bind(window);window.fetch=async(input,init={})=>{const u=typeof input==="string"?input:(input&&input.url)||"";let opt={...init};if(u.includes("baleti-sauvage.baletisauvage.workers.dev")){const h=new Headers(init.headers||(input instanceof Request?input.headers:undefined));const token=localStorage.getItem(K);if(token)h.set("X-Admin-Token",token);opt.headers=h}const r=await F(input,opt);if(u.includes("/api/login")&&r.ok){try{const j=await r.clone().json();if(j.token)localStorage.setItem(K,j.token)}catch{}}if(u.includes("/api/logout")&&r.ok)localStorage.removeItem(K);return r}})();</script>'''
+          files=[Path('admin.html'),*sorted(Path('.').glob('admin-*.html'))]
+          changed=[]
+          for p in files:
+              s=p.read_text(encoding='utf-8')
+              if marker in s:
+                  continue
+              if '</head>' not in s:
+                  raise SystemExit(f'</head> introuvable dans {p}')
+              p.write_text(s.replace('</head>',script+'</head>',1),encoding='utf-8')
+              changed.append(str(p))
+          print('Pages corrigees:', ', '.join(changed) if changed else 'deja corrigees')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add admin.html admin-*.html
+          git diff --cached --quiet || git commit -m 'Generalize admin mobile session across all pages'
+          git push
