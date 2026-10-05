@@ -1,0 +1,39 @@
+name: Update Baleti ring emojis
+on:
+  push:
+    paths:
+      - '.github/workflows/baleti-ring-emojis.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update ring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          old_css="border-radius:50%;border:0;overflow:visible;z-index:5;box-shadow:none"
+          new_css="border-radius:50%;border:0;overflow:visible;z-index:5;box-shadow:0 0 0 1px #000"
+          if old_css not in s:
+              raise SystemExit('ring CSS not found')
+          s=s.replace(old_css,new_css,1)
+          old1='>BALÈTI SAUVAGE</textPath>'
+          new1='>💃 BALÈTI SAUVAGE 🕺</textPath>'
+          old2='>MONTPELLIER</textPath>'
+          new2='>🎵 MONTPELLIER 🎵</textPath>'
+          if old1 not in s or old2 not in s:
+              raise SystemExit('ring labels not found')
+          s=s.replace(old1,new1,1).replace(old2,new2,1)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name baletisauvage
+          git config user.email baletisauvage@gmail.com
+          git add index.html
+          git commit -m "Add ring emojis and thin outline"
+          git push
