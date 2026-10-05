@@ -1,0 +1,32 @@
+name: Ajuster texte cercle
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/ring-text-spacing.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Agrandir et aerer le texte du cercle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          old='.baleti-ring text{fill:#fff;font:600 13px Georgia,serif;letter-spacing:.7px}'
+          new='.baleti-ring text{fill:#fff;font:600 15px Georgia,serif;letter-spacing:1.4px}'
+          if old not in s:
+              raise SystemExit('CSS attendu introuvable')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Agrandir et aerer le texte du cercle central'
+          git push
