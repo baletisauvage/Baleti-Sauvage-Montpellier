@@ -1,0 +1,37 @@
+name: Ajout pièces jointes messages
+on:
+  push:
+    paths:
+      - .github/workflows/add-message-attachment.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mettre à jour le formulaire message
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          old='<textarea id="text" placeholder="Message" maxlength="1200" required></textarea><input id="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px"><button type="submit">ENVOYER</button>'
+          new='<textarea id="text" placeholder="Message" maxlength="1200" required></textarea><label class="attachment-field"><span>PIÈCE JOINTE (facultatif)</span><input id="attachment" name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt,.mp4,.mov,.webm,application/pdf,image/jpeg,image/png,video/mp4,video/quicktime,video/webm"><small>PDF, JPG, PNG, DOC, DOCX, TXT : 8 Mo max · MP4, MOV, WebM : 50 Mo max</small></label><input id="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px"><button type="submit">ENVOYER</button>'
+          if old not in s: raise SystemExit('Bloc formulaire introuvable')
+          s=s.replace(old,new,1)
+          css='.attachment-field{display:grid;gap:8px;padding:8px 0;border-bottom:2px solid #fff;text-shadow:0 2px 5px #000}.attachment-field span{font-weight:800;font-size:14px}.attachment-field input{border:0!important;padding:4px 0!important}.attachment-field small{font-size:12px;line-height:1.35}.attachment-field input::file-selector-button{margin-right:12px;padding:8px 12px;border:1px solid #fff;background:transparent;color:#fff;font-weight:800;cursor:pointer}'
+          s=s.replace('</style>',css+'</style>',1)
+          js='''<script>(()=>{const f=document.getElementById('messageForm');if(!f)return;f.addEventListener('submit',async e=>{e.preventDefault();e.stopImmediatePropagation();const st=document.getElementById('status'),btn=f.querySelector('button[type="submit"]'),file=document.getElementById('attachment').files[0];if(file){const ext=(file.name.split('.').pop()||'').toLowerCase(),video=['mp4','mov','webm'].includes(ext),max=video?50*1024*1024:8*1024*1024;if(file.size>max){st.textContent=video?'Vidéo : maximum 50 Mo.':'Fichier : maximum 8 Mo.';return}}const d=new FormData();d.append('prenom',document.getElementById('name').value);d.append('contact',document.getElementById('contact').value);d.append('message',document.getElementById('text').value);d.append('website',document.getElementById('website').value);if(file)d.append('attachment',file,file.name);btn.disabled=true;st.textContent=file?'Envoi du message et du fichier…':'Envoi…';try{const r=await fetch(API+'/api/messages',{method:'POST',body:d}),j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||j.detail||('HTTP '+r.status));f.reset();st.textContent='✓ Message envoyé'}catch(err){st.textContent='Erreur : '+err.message}finally{btn.disabled=false}},true)})();</script>'''
+          s=s.replace('</body>',js+'</body>',1)
+          p.write_text(s)
+          PY
+      - name: Retirer ce workflow temporaire
+        run: rm .github/workflows/add-message-attachment.yml
+      - name: Publier
+        run: |
+          git config user.name "Balèti Sauvage automation"
+          git config user.email "baletisauvage@gmail.com"
+          git add index.html .github/workflows/add-message-attachment.yml
+          git commit -m "Ajoute les pièces jointes au formulaire message"
+          git push
