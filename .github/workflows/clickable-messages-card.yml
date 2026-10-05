@@ -1,0 +1,39 @@
+name: Carte Messages cliquable
+on:
+  push:
+    paths:
+      - .github/workflows/clickable-messages-card.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rendre toute la zone Messages cliquable
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('admin.html')
+          s=p.read_text()
+          old='<section class="card section" id="sec-messages"><h2>Messages</h2><p class="hint">Messages reçus depuis le bouton MESSAGES du site.</p><a class="admin-link" href="admin-messages.html">Lire et gérer les messages</a></section>'
+          new='<section class="card section clickable-admin-section" id="sec-messages" role="link" tabindex="0" aria-label="Lire et gérer les messages"><h2>Messages</h2><p class="hint">Messages reçus depuis le bouton MESSAGES du site.</p><a class="admin-link" href="admin-messages.html">Lire et gérer les messages</a></section>'
+          if old not in s: raise SystemExit('Bloc Messages introuvable')
+          s=s.replace(old,new,1)
+          css='.clickable-admin-section{cursor:pointer}.clickable-admin-section:hover .admin-link{border-bottom-width:3px}.clickable-admin-section:focus{outline:2px solid #17130d;outline-offset:4px}'
+          s=s.replace('</style>',css+'</style>',1)
+          needle="document.querySelectorAll('.admin-menu button').forEach(b=>b.onclick=()=>showSection(b.dataset.section));"
+          add=needle+"const msgSection=$('sec-messages');msgSection.onclick=e=>{if(!e.target.closest('a'))location.href='admin-messages.html'};msgSection.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();location.href='admin-messages.html'}};"
+          if needle not in s: raise SystemExit('Point JS introuvable')
+          s=s.replace(needle,add,1)
+          p.write_text(s)
+          PY
+      - name: Retirer ce workflow temporaire
+        run: rm .github/workflows/clickable-messages-card.yml
+      - name: Publier
+        run: |
+          git config user.name "Balèti Sauvage automation"
+          git config user.email "baletisauvage@gmail.com"
+          git add admin.html .github/workflows/clickable-messages-card.yml
+          git commit -m "Rend toute la zone Messages cliquable"
+          git push
