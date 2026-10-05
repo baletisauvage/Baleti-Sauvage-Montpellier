@@ -1,0 +1,33 @@
+name: Update Baleti ring
+on:
+  push:
+    paths:
+      - '.github/workflows/baleti-ring.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update ring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace("box-shadow:0 0 0 5px #000", "box-shadow:none", 1)
+          old='<svg class="baleti-ring" viewBox="0 0 240 240" aria-hidden="true"><defs><path id="baletiCircle" d="M120,120 m-94,0 a94,94 0 1,1 188,0 a94,94 0 1,1 -188,0"/></defs><text><textPath href="#baletiCircle" startOffset="0%" textLength="590" lengthAdjust="spacing">BALÈTI SAUVAGE • MONTPELLIER • BALÈTI SAUVAGE • MONTPELLIER • </textPath></text></svg>'
+          new='<svg class="baleti-ring" viewBox="0 0 240 240" aria-hidden="true"><defs><path id="baletiLeft" d="M120,214 A94,94 0 0,1 120,26"/><path id="baletiRight" d="M120,26 A94,94 0 0,1 120,214"/></defs><text><textPath href="#baletiLeft" startOffset="50%" text-anchor="middle">BALÈTI SAUVAGE</textPath></text><text><textPath href="#baletiRight" startOffset="50%" text-anchor="middle">MONTPELLIER</textPath></text></svg>'
+          if old not in s:
+              raise SystemExit('ring markup not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name baletisauvage
+          git config user.email baletisauvage@gmail.com
+          git add index.html
+          git commit -m "Separate Baleti ring labels and remove outline"
+          git push
