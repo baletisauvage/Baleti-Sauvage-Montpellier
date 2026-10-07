@@ -41,6 +41,20 @@ html{padding:5px}body{border-width:5px;background-attachment:scroll}
 .home-grid .menu-home{width:110px!important;height:75px!important}
 .home-grid .contact-home,.home-grid .admin{width:76px!important;height:52px!important}
 }
+/* Position prioritaire MENU sur mobile et tablette */
+@media(max-width:900px){
+.home-grid .menu-home{
+position:absolute!important;
+grid-area:unset!important;
+left:50%!important;right:auto!important;top:auto!important;bottom:8px!important;
+transform:translateX(-50%)!important;
+justify-self:unset!important;align-self:unset!important;
+width:110px!important;height:75px!important;z-index:29!important
+}
+}
+@media(max-width:600px){
+.home-grid .menu-home{width:100px!important;height:68px!important}
+}
 /* Position prioritaire ADMIN / CONTACT sur mobile et tablette */
 @media(max-width:900px){
 .home-grid .admin{
