@@ -27,7 +27,7 @@
     const link=document.createElement('a');link.href=api+'/api/published/file?id='+encodeURIComponent(item.id);link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';line.append(link);
     const remove=document.createElement('button');remove.type='button';remove.textContent='Supprimer';
     remove.onclick=async()=>{if(!confirm('Supprimer définitivement cette publication du site ?'))return;remove.disabled=true;try{await request('/api/published/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id})});await refresh()}catch(e){alert(e.message);remove.disabled=false}};
-    line.append(remove);target.append(line);
+    const edit=document.createElement('button');edit.type='button';edit.textContent='Modifier le titre';edit.onclick=async()=>{const title=prompt('Nouveau titre de la publication',item.title||item.original_name||'');if(title===null)return;if(!title.trim()){alert('Le titre est obligatoire.');return;}edit.disabled=true;try{await request('/api/published/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,title:title.trim()})});await refresh()}catch(e){alert(e.message);edit.disabled=false}};line.append(edit);line.append(remove);target.append(line);
    }
   }catch(e){target.textContent='Impossible de charger les publications : '+e.message}
  }
