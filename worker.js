@@ -751,7 +751,7 @@ async function forumRoute(request,env,isAdmin) {
   let data;try{data=JSON.parse(raw)}catch{return respond({ok:false,error:'JSON invalide'},400)}
   if(!data||typeof data!=='object'||Array.isArray(data))return respond({ok:false,error:'Message invalide'},400);
   const nickname=String(data.nickname||'').trim(),body=String(data.body||'').trim(),parent=String(data.parent_id||'');
-  if(nickname.length<2||nickname.length>32||body.length<2||body.length>800||/[<>]/.test(nickname)||/[\\u0000-\\u001f\\u007f]/.test(nickname))return respond({ok:false,error:'Pseudo ou message invalide'},400);
+  if(nickname.length<2||nickname.length>32||body.length<2||body.length>800||/[<>]/.test(nickname)||/[\u0000-\u001f\u007f]/.test(nickname))return respond({ok:false,error:'Pseudo ou message invalide'},400);
   if(parent){const row=await env.DB.prepare('SELECT id FROM forum_posts WHERE id=? AND hidden=0 AND expires_at>? AND parent_id IS NULL').bind(parent,now).first();if(!row)return respond({ok:false,error:'Discussion expirée'},404)}
   const ip=request.headers.get('CF-Connecting-IP')||'unknown';
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip+':'+new Date().toISOString().slice(0,10)));
