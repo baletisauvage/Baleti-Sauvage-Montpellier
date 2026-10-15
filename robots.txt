@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /admin-contacts.html
+Disallow: /admin-liens.html
+Disallow: /admin-messages.html
+Disallow: /admin-papiers.html
+Disallow: /admin-photos.html
+Disallow: /admin-presentation.html
+Disallow: /admin-prochain.html
+Disallow: /admin-suivre.html
+Disallow: /admin-videos.html
+Disallow: /d1-test.html
+Disallow: /worker-test.html
+
+Sitemap: https://baletisauvage.github.io/sitemap.xml
