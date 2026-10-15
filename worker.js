@@ -19,6 +19,99 @@ async function attachmentPut(env,key,bytes){return v71B2Put(env,key,bytes);}
 async function attachmentGet(env,key){return v71B2Get(env,key);}
 async function attachmentDelete(env,key){return v71B2Delete(env,key);}
 
+// Storage monitoring: aggregate sizes only, never return credentials or filenames.
+const STORAGE_QUOTAS = {b2:10_000_000_000,d1Account:5_000_000_000,d1Database:500_000_000,pages:1_000_000_000,githubRecommended:1_000_000_000};
+function storageBudget(usedBytes,limitBytes){
+  if(!Number.isSafeInteger(usedBytes)||usedBytes<0)throw Error('Invalid storage size');
+  const ratio=usedBytes/limitBytes;
+  return {usedBytes,limitBytes,remainingBytes:Math.max(0,limitBytes-usedBytes),overBytes:Math.max(0,usedBytes-limitBytes),percent:ratio*100,level:ratio>=1?'exceeded':ratio>=0.95?'critical':ratio>=0.8?'warning':'ok'};
+}
+async function storageB2(env){
+  const response=await fetch('https://api.backblazeb2.com/b2api/v3/b2_authorize_account',{headers:{Authorization:'Basic '+btoa(env.B2_KEY_ID+':'+env.B2_APPLICATION_KEY)}});
+  if(!response.ok)throw Error('B2 authorization unavailable');
+  const auth=await response.json(),storage=auth.apiInfo?.storageApi||{},allowed=storage.allowed||auth.allowed||{};
+  const api=storage.apiUrl||auth.apiUrl,token=auth.authorizationToken;
+  if(!api||!token)throw Error('B2 authorization invalid');
+  let calls=0;
+  const request=async(method,body)=>{
+    if(++calls>35)throw Error('B2 inventory too large for one request');
+    const r=await fetch(api+'/b2api/v3/'+method,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw Error('B2 inventory unavailable');
+    return r.json();
+  };
+  let buckets=[{bucketId:env.B2_BUCKET_ID}],accountComplete=false;
+  if(!allowed.bucketId&&!allowed.namePrefix){
+    try{const all=await request('b2_list_buckets',{accountId:auth.accountId,bucketTypes:['all']});if(!Array.isArray(all.buckets))throw Error();buckets=all.buckets;accountComplete=true;}catch(_){/* Restricted key: measure the project bucket, never claim account-wide coverage. */}
+  }
+  if(allowed.bucketId&&allowed.bucketId!==env.B2_BUCKET_ID)throw Error('B2 bucket mismatch');
+  const groups={gallery:0,messages:0,published:0,test:0,other:0};
+  let usedBytes=0,versions=0,oldVersionBytes=0,unfinishedBytes=0,unfinishedFiles=0;
+  const category=name=>name.startsWith('test-v71/')?'test':name.startsWith('media/')?'gallery':name.startsWith('messages/')?'messages':name.startsWith('published/')?'published':'other';
+  for(const bucket of buckets){
+    const seen=new Set();let startFileName,startFileId;
+    do{
+      const page=await request('b2_list_file_versions',{bucketId:bucket.bucketId,maxFileCount:1000,...(allowed.namePrefix?{prefix:allowed.namePrefix}:{}),...(startFileName?{startFileName,startFileId}:{})});
+      if(!Array.isArray(page.files))throw Error('Invalid B2 inventory');
+      for(const file of page.files){
+        const name=String(file.fileName||''),old=seen.has(name);seen.add(name);
+        if(file.action!=='upload')continue;
+        const size=Number(file.contentLength);if(!Number.isSafeInteger(size)||size<0)throw Error('Invalid B2 size');
+        usedBytes+=size;groups[category(name)]+=size;versions++;if(old)oldVersionBytes+=size;
+      }
+      if(page.nextFileName===startFileName&&page.nextFileId===startFileId&&page.nextFileName)throw Error('B2 cursor stalled');
+      startFileName=page.nextFileName;startFileId=page.nextFileId;
+    }while(startFileName);
+    let nextFileId;
+    do{
+      const page=await request('b2_list_unfinished_large_files',{bucketId:bucket.bucketId,maxFileCount:100,...(allowed.namePrefix?{namePrefix:allowed.namePrefix}:{}),...(nextFileId?{startFileId:nextFileId}:{})});
+      if(!Array.isArray(page.files))throw Error('Invalid B2 unfinished inventory');
+      for(const file of page.files){
+        unfinishedFiles++;let nextPartNumber;
+        do{
+          const parts=await request('b2_list_parts',{fileId:file.fileId,maxPartCount:1000,...(nextPartNumber?{startPartNumber:nextPartNumber}:{})});
+          if(!Array.isArray(parts.parts))throw Error('Invalid B2 parts');
+          for(const part of parts.parts){const size=Number(part.contentLength);if(!Number.isSafeInteger(size)||size<0)throw Error('Invalid B2 part size');usedBytes+=size;unfinishedBytes+=size;groups[category(String(file.fileName||''))]+=size;}
+          if(parts.nextPartNumber===nextPartNumber&&parts.nextPartNumber)throw Error('B2 parts cursor stalled');nextPartNumber=parts.nextPartNumber;
+        }while(nextPartNumber);
+      }
+      if(page.nextFileId===nextFileId&&page.nextFileId)throw Error('B2 unfinished cursor stalled');nextFileId=page.nextFileId;
+    }while(nextFileId);
+  }
+  return {...storageBudget(usedBytes,STORAGE_QUOTAS.b2),checkedAt:new Date().toISOString(),scope:accountComplete?'account':allowed.namePrefix?'prefix':'bucket',accountComplete,bucketCount:buckets.length,versions,oldVersionBytes,unfinishedBytes,unfinishedFiles,groups};
+}
+async function storageGithub(env){
+  const headers={Authorization:'Bearer '+env.GITHUB_TOKEN,Accept:'application/vnd.github+json','User-Agent':'Baleti-Sauvage-Storage'};
+  const root='https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO;
+  const [repoResponse,treeResponse]=await Promise.all([fetch(root,{headers}),fetch(root+'/git/trees/'+GH_BRANCH+'?recursive=1',{headers})]);
+  if(!repoResponse.ok||!treeResponse.ok)throw Error('GitHub inventory unavailable');
+  const repo=await repoResponse.json(),tree=await treeResponse.json();
+  if(tree.truncated||!Array.isArray(tree.tree))throw Error('GitHub inventory incomplete');
+  const sourceBytes=tree.tree.filter(x=>x.type==='blob').reduce((n,x)=>n+Number(x.size||0),0);
+  return {checkedAt:new Date().toISOString(),repository:storageBudget(Math.ceil(Number(repo.size)*1024),STORAGE_QUOTAS.githubRecommended),siteEstimate:storageBudget(sourceBytes,STORAGE_QUOTAS.pages),estimated:true};
+}
+async function storageCached(env,resource,refresh,measure){
+  const row=await env.DB.prepare('SELECT payload FROM storage_usage_cache WHERE resource=?').bind(resource).first();
+  let cached;try{cached=row?JSON.parse(row.payload):null;}catch(_){}
+  const age=cached?Date.now()-Date.parse(cached.checkedAt):Infinity;
+  if(age<(refresh?60_000:900_000))return {...cached,cached:true};
+  try{
+    const result=await measure();
+    await env.DB.prepare('INSERT INTO storage_usage_cache(resource,payload) VALUES(?,?) ON CONFLICT(resource) DO UPDATE SET payload=excluded.payload').bind(resource,JSON.stringify(result)).run();
+    return result;
+  }catch(_){return cached?{...cached,stale:true,error:'Actualisation indisponible ; dernier relevé affiché.'}:{available:false,error:'Mesure indisponible avec les accès actuels.'};}
+}
+async function storageReport(env,refresh){
+  const [b2,github,probe,baseline]=await Promise.all([
+    storageCached(env,'b2',refresh,()=>storageB2(env)),
+    storageCached(env,'github',refresh,()=>storageGithub(env)),
+    env.DB.prepare('SELECT 1 AS storage_probe').run(),
+    env.DB.prepare("SELECT payload FROM storage_usage_cache WHERE resource='d1-account'").first()
+  ]);
+  const used=Number(probe.meta?.size_after);let accountBaseline;try{accountBaseline=baseline?JSON.parse(baseline.payload):null;}catch(_){}
+  const d1=Number.isSafeInteger(used)?{...storageBudget(used,STORAGE_QUOTAS.d1Database),checkedAt:new Date().toISOString(),account:accountBaseline?{...storageBudget(used+accountBaseline.otherBytes,STORAGE_QUOTAS.d1Account),otherDatabasesCheckedAt:accountBaseline.checkedAt,knownDatabaseCount:accountBaseline.databaseCount,estimated:true}:null}:{available:false,error:'Taille D1 indisponible.'};
+  return {ok:true,b2,d1,github,quotaCheckedAt:'2026-10-15',thresholds:{warning:80,critical:95},storageOnly:true};
+}
+
 var COOKIE = "baleti_admin";
 
 var SESSION = 43200;
@@ -104,6 +197,7 @@ async function ensureColumns(DB, t, defs) {
 __name(ensureColumns, "ensureColumns");
 
 async function init(DB) {
+  await DB.prepare('CREATE TABLE IF NOT EXISTS storage_usage_cache(resource TEXT PRIMARY KEY,payload TEXT NOT NULL)').run();
 
   await DB.batch([DB.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS event_overrides (event_date TEXT PRIMARY KEY,time TEXT,place TEXT,lat REAL,lng REAL,comment TEXT DEFAULT '',cancelled INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS locations (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,lat REAL,lng REAL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_login_rate (key TEXT PRIMARY KEY,failures INTEGER NOT NULL DEFAULT 0,first_failure INTEGER NOT NULL,last_failure INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,prenom TEXT NOT NULL,contact TEXT DEFAULT '',message TEXT NOT NULL,date_creation TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,lu INTEGER NOT NULL DEFAULT 0)"), DB.prepare("CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, prenom TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', telephone TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS public_request_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS unsubscribe_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS contact_optin_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, prenom TEXT NOT NULL, telephone TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)")]);
 
@@ -906,6 +1000,8 @@ var worker_default = { async fetch(request, env) {
     }
 
     if (!await auth(request, env)) return json({ ok: false, error: "Non autoris\xE9" }, 401);
+    if(p==='/api/admin/storage'&&request.method==='GET')return json(await storageReport(env,false));
+    if(p==='/api/admin/storage/refresh'&&request.method==='POST')return json(await storageReport(env,true));
 
     if(p==="/api/admin/migrate-gallery-v71"&&request.method==="POST"){const q=await request.json().catch(()=>({}));const start=Number(q.start||0);if(!Number.isInteger(start)||start<0||start>10000)return json({ok:false,error:"Index invalide"},400);const manifests=[['photos',PHOTO_MANIFEST],['videos',VIDEO_MANIFEST],['papiers',PAPER_MANIFEST]];const all=[];for(const [kind,path] of manifests){const d=await arrayData(env,path);for(const item of d.items){if(item&&typeof item.fichier==='string'&&item.fichier)all.push({kind,file:item.fichier});}}const slice=all.slice(start,start+2);const results=[];for(const item of slice){try{results.push({...item,...await v71MediaCopy(env,item.kind,item.file)})}catch(e){results.push({...item,status:'échec',error:String(e.message||e).slice(0,160)})}}return json({ok:results.every(x=>x.status!=='échec'),total:all.length,next:start+slice.length,done:start+slice.length>=all.length,results,originalsPreserved:true});}
     if (p === "/api/admin/b2-check" && request.method === "GET") {
