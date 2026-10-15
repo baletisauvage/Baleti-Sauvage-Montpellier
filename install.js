@@ -4,6 +4,33 @@
   const help = document.getElementById('contactHelp');
   if (!button || !help) return;
   let pendingPrompt = null;
+  const firefox = /Firefox\//.test(navigator.userAgent);
+  const desktop = !/Android|iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (firefox && desktop) button.textContent = '📲 AJOUTER BALÈTI';
+  const showDesktopShortcut = () => {
+    if (document.getElementById('baletiDesktopShortcut')) return;
+    const box = document.createElement('div');
+    box.id = 'baletiDesktopShortcut';
+    box.style.cssText = 'margin-top:16px;padding:12px;border:1px solid currentColor';
+    const link = document.createElement('a');
+    link.href = new URL('./', document.baseURI).href;
+    link.draggable = true;
+    link.title = 'Glisser ce lien sur le bureau pour créer le raccourci Balèti';
+    link.style.cssText = 'display:inline-flex;align-items:center;gap:12px;color:inherit;font-weight:800;text-decoration:underline';
+    const icon = document.createElement('img');
+    icon.src = new URL('favicon_baleti_original.ico', document.baseURI).href;
+    icon.alt = '';
+    icon.width = 56;
+    icon.height = 56;
+    link.appendChild(icon);
+    link.appendChild(document.createTextNode('Balèti Sauvage Montpellier'));
+    const note = document.createElement('p');
+    note.textContent = 'Pour créer un raccourci sur le bureau : réduis la fenêtre de Firefox, puis fais glisser cette icône vers une zone libre du bureau.';
+    note.style.cssText = 'font-size:14px;line-height:1.5;margin:12px 0 0';
+    box.appendChild(link);
+    box.appendChild(note);
+    help.parentNode.insertBefore(box, help.nextSibling);
+  };
   const standalone = window.matchMedia('(display-mode: standalone)');
   const installed = () => standalone.matches || navigator.standalone === true;
   const showInstalled = () => {
@@ -47,6 +74,11 @@
     const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (ios) {
       help.textContent = 'Sur iPhone ou iPad : ouvre le menu Partager, choisis « Sur l’écran d’accueil », puis confirme avec « Ajouter ». L’icône Balèti ouvrira directement le site.';
+    } else if (firefox && desktop) {
+      help.textContent = /Win/.test(navigator.platform)
+        ? 'Firefox sous Windows : clique sur le bouton « Applications web » dans la barre d’adresse pour installer Balèti et l’ajouter à la barre des tâches. Si ce bouton n’est pas proposé, crée le raccourci bureau avec l’icône ci-dessous.'
+        : 'Dans Firefox, crée un raccourci en faisant glisser le lien Balèti ci-dessous sur le bureau.';
+      showDesktopShortcut();
     } else if (/Mac/.test(navigator.platform) && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg/.test(navigator.userAgent)) {
       help.textContent = 'Dans Safari sur Mac : choisis Fichier → Ajouter au Dock, puis confirme. L’icône Balèti ouvrira le site dans sa propre fenêtre.';
     } else {
