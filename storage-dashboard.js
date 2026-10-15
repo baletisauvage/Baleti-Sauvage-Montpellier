@@ -68,6 +68,8 @@
     finally{busy=false;refresh.disabled=false;}
   }
   refresh.addEventListener('click',()=>load(true));
-  document.addEventListener('baleti:adminloaded',()=>load(false));
-  if(!document.getElementById('admin').classList.contains('hidden'))load(false);
+  const visible=()=>!document.getElementById('admin').classList.contains('hidden')&&!document.getElementById('storagePanel')?.classList.contains('hidden');
+  document.addEventListener('baleti:adminloaded',()=>{if(visible())load(false);});
+  document.addEventListener('baleti:storageopened',()=>{if(visible())load(false);});
+  if(visible())load(false);
 })();
