@@ -1,8 +1,8 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "baleti-sauvage-dev",
+  "name": "baleti-sauvage",
   "main": "worker.js",
   "compatibility_date": "2026-10-02",
+  "keep_vars": true,
   "d1_databases": [
     {
       "binding": "DB",
