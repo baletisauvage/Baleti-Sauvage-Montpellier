@@ -24,14 +24,11 @@ export async function forumRoute(request,env,isAdmin) {
   const ip=request.headers.get('CF-Connecting-IP')||'unknown';
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip+':'+new Date().toISOString().slice(0,10)));
   const fingerprint=Array.from(new Uint8Array(bytes)).map(x=>x.toString(16).padStart(2,'0')).join('');
-  const previous=await env.DB.prepare('SELECT last_post_at FROM forum_limits WHERE fingerprint=?').bind(fingerprint).first();
-  if(previous&&now-previous.last_post_at<60000)return respond({ok:false,error:'Attendez une minute entre deux messages'},429);
+  const limited=await env.DB.prepare('INSERT INTO forum_limits(fingerprint,last_post_at) VALUES(?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_post_at=excluded.last_post_at WHERE forum_limits.last_post_at<?').bind(fingerprint,now,now-60000).run();
+  if(!limited.meta?.changes)return respond({ok:false,error:'Attendez une minute entre deux messages'},429);
   const expiry=parent?(await env.DB.prepare('SELECT expires_at FROM forum_posts WHERE id=?').bind(parent).first()).expires_at:now+ttl;
   const id=crypto.randomUUID();
-  await env.DB.batch([
-   env.DB.prepare('INSERT INTO forum_posts(id,parent_id,nickname,body,created_at,expires_at) VALUES(?,?,?,?,?,?)').bind(id,parent||null,nickname,body,now,expiry),
-   env.DB.prepare('INSERT INTO forum_limits(fingerprint,last_post_at) VALUES(?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_post_at=excluded.last_post_at').bind(fingerprint,now)
-  ]);
+  await env.DB.prepare('INSERT INTO forum_posts(id,parent_id,nickname,body,created_at,expires_at) VALUES(?,?,?,?,?,?)').bind(id,parent||null,nickname,body,now,expiry).run();
   return respond({ok:true,id,expires_at:expiry},201);
  }
  if(request.method==='GET'&&p==='/api/forum/admin'){
