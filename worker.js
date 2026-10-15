@@ -753,11 +753,6 @@ async function forumRoute(request,env,isAdmin) {
   const nickname=String(data.nickname||'').trim(),body=String(data.body||'').trim(),parent=String(data.parent_id||'');
   if(nickname.length<2||nickname.length>32||body.length<2||body.length>800||/[<>]/.test(nickname)||/[\u0000-\u001f\u007f]/.test(nickname))return respond({ok:false,error:'Pseudo ou message invalide'},400);
   if(parent){const row=await env.DB.prepare('SELECT id FROM forum_posts WHERE id=? AND hidden=0 AND expires_at>? AND parent_id IS NULL').bind(parent,now).first();if(!row)return respond({ok:false,error:'Discussion expirée'},404)}
-  const ip=request.headers.get('CF-Connecting-IP')||'unknown';
-  const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip+':'+new Date().toISOString().slice(0,10)));
-  const fingerprint=Array.from(new Uint8Array(bytes)).map(x=>x.toString(16).padStart(2,'0')).join('');
-  const limited=await env.DB.prepare('INSERT INTO forum_limits(fingerprint,last_post_at) VALUES(?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_post_at=excluded.last_post_at WHERE forum_limits.last_post_at<?').bind(fingerprint,now,now-60000).run();
-  if(!limited.meta?.changes)return respond({ok:false,error:'Attendez une minute entre deux messages'},429);
   const expiry=parent?(await env.DB.prepare('SELECT expires_at FROM forum_posts WHERE id=?').bind(parent).first()).expires_at:now+ttl;
   const id=crypto.randomUUID();
   await env.DB.prepare('INSERT INTO forum_posts(id,parent_id,nickname,body,created_at,expires_at) VALUES(?,?,?,?,?,?)').bind(id,parent||null,nickname,body,now,expiry).run();
