@@ -18,13 +18,13 @@
     const url=api+'/api/published/file?id='+encodeURIComponent(item.id);
     const title=document.createElement('strong');title.textContent=item.title||item.original_name||'Sans titre';card.append(title);
     
-    const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';card.append(link);const download=document.createElement('button');download.type='button';download.textContent='Télécharger le fichier';download.style.marginLeft='12px';download.onclick=()=>downloadPublished(item,download);card.append(download);
+    const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';card.append(link);
     const form=document.createElement('form');form.style.cssText='display:flex;flex-direction:column;gap:10px;margin-top:12px';
     const titleInput=field(form,'Titre',item.title||item.original_name||'');titleInput.maxLength=120;
     
     const visibleInput=field(form,'Visible',Number(item.visible)!==0,'checkbox');
     
-    const actions=document.createElement('div');actions.className='actions';const save=document.createElement('button');save.type='submit';save.textContent='Enregistrer';actions.append(save);
+    const actions=document.createElement('div');actions.className='actions';const download=document.createElement('a');download.href='#';download.textContent='Télécharger';download.onclick=e=>{e.preventDefault();downloadPublished(item,download)};actions.append(download);const save=document.createElement('button');save.type='submit';save.textContent='Enregistrer';actions.append(save);
     const remove=document.createElement('button');remove.type='button';remove.textContent='Supprimer';remove.className='delete';actions.append(remove);form.append(actions);card.append(form);container.append(card);
     form.onsubmit=async e=>{e.preventDefault();if(!titleInput.value.trim()){alert('Titre obligatoire');return}save.disabled=true;try{await call('/api/published/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,title:titleInput.value.trim(),visible:visibleInput.checked,date_media:item.date_media||'',credit:item.credit||'',principale:Number(item.principale)===1})});await refresh()}catch(err){alert(err.message);save.disabled=false}};
     remove.onclick=async()=>{if(!confirm('Supprimer définitivement cette publication ?'))return;remove.disabled=true;try{await call('/api/published/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id})});await refresh()}catch(err){alert(err.message);remove.disabled=false}};
