@@ -17,9 +17,9 @@
     const text=document.createElement('span');text.textContent=label;const arrow=document.createElement('span');arrow.className='install-arrow';arrow.setAttribute('aria-hidden','true');arrow.textContent='↗';button.replaceChildren(icon,text,arrow);
     button.disabled=false;
   };
-  const defaultLabel='Installer Balèti';
+  const defaultLabel=firefox?'Voir comment installer Balèti':'Installer Balèti';
   const destination=document.getElementById('installDestination');
-  if(destination)destination.textContent=mobile?'Retrouve son icône sur ton écran d’accueil.':windows?'Retrouve son icône dans ta barre des tâches.':mac?'Retrouve son icône dans le Dock.':'Ouvre le site en un clic depuis son icône.';
+  if(destination)destination.textContent=mobile?'Ajoute Balèti à ton écran d’accueil.':windows&&firefox?'Firefox sur Windows : découvre comment créer l’application et l’épingler à la barre des tâches.':windows?'Installe Balèti, puis épingle son icône à la barre des tâches.':mac?'Retrouve Balèti dans ton Dock ou tes favoris.':'Garde Balèti à portée de clic.';
   const guide=(title,steps,detail='',url='')=>{
     let box=document.getElementById('baletiInstallGuide');
     if(!box){box=document.createElement('section');box.id='baletiInstallGuide';help.parentNode.insertBefore(box,help.nextSibling);}
