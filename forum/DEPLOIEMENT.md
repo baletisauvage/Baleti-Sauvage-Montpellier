@@ -34,3 +34,9 @@ La page `admin-forum.html` est déjà liée au menu d'administration. Elle néce
 - [ ] Limitation de débit effective
 - [ ] Purge physique des anciens messages
 - [ ] Tests sur mobile et accessibilité
+
+## Vérification réalisée le 15 octobre 2026
+
+Le schéma du forum a été appliqué à la base D1 de test `baleti-sauvage-test-v71`. Une lecture de `sqlite_master` confirme la présence de `forum_posts` et `forum_limits`. La liaison `DB` du Worker de production pointe vers `baleti-sauvage-db` ; elle n'a pas été modifiée. Aucun message de test n'a été ajouté à la base principale.
+
+Les tests de publication, de modération, de limitation de débit et d'expiration restent à exécuter après intégration des routes. La migration de production n'a pas été lancée.
