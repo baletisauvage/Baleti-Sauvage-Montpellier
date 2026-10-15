@@ -781,7 +781,11 @@ async function forumRoute(request,env,isAdmin) {
 }
 
 
-var worker_default = { async fetch(request, env) {
+var worker_default = { async scheduled(event, env) {
+  const now=Date.now();
+  await env.DB.prepare('DELETE FROM forum_posts WHERE expires_at <= ?').bind(now).run();
+  await env.DB.prepare('DELETE FROM forum_limits WHERE last_post_at < ?').bind(now-86400000).run();
+}, async fetch(request, env) {
   if (new URL(request.url).pathname.startsWith('/api/forum')) {
     try { const result = await forumRoute(request, env, auth); if (result) return result; }
     catch (error) { console.error('Forum API error', error); return json({ok:false,error:'Forum temporairement indisponible'},500); }
