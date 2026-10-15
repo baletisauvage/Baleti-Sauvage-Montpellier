@@ -9,5 +9,8 @@
       "database_name": "baleti-sauvage-db",
       "database_id": "163fef81-98d6-4d67-b3d5-357aacb7794c"
     }
-  ]
+  ],
+  "vars": {
+    "CONTACT_OPTIN_MODE": "direct"
+  }
 }

@@ -813,11 +813,17 @@ var worker_default = { async fetch(request, env) {
       } catch (e) { if (fileId) { try { await attachmentDelete(env, fileId); } catch (cleanupError) { console.error("R2 cleanup after D1 failure failed", cleanupError); } } throw e; }
       return json({ok:true});
     }
-    // Phase 15: only verified email addresses may create/reactivate subscriptions.
+    // Explicit direct-consent mode; email confirmation remains the default.
     if (p === "/api/contacts" && request.method === "POST") {
       if (await publicRateLimited(request, env, "contacts")) return json({ok:false,error:"Trop de demandes. Réessaie dans une heure."},429);
       const b = await request.json(), c = contactPayload(b);
       if (!c || b.consent !== true || !c.email) return json({ok:false,error:"Prénom, adresse email valide et consentement explicite obligatoires. L'inscription par téléphone seul n'est pas disponible."},400);
+      if (env.CONTACT_OPTIN_MODE === "direct") {
+        // Atomic insert only: public requests cannot edit or reactivate existing contacts.
+        await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active) SELECT ?,?,?,1,1 WHERE NOT EXISTS(SELECT 1 FROM contacts WHERE email=?)")
+          .bind(c.prenom,c.email,c.telephone,c.email).run();
+        return json({ok:true,message:"Demande enregistrée. Si tu étais déjà désinscrit, contacte l’équipe pour te réinscrire."});
+      }
       if (!env.RESEND_API_KEY || !env.UNSUBSCRIBE_FROM_EMAIL) return json({ok:false,error:"Confirmation par email indisponible pour le moment."},503);
       const existing = await env.DB.prepare("SELECT id,active FROM contacts WHERE email=? ORDER BY id DESC LIMIT 1").bind(c.email).first();
       // Same outward response for an already-active subscriber, without revealing status.
@@ -868,6 +874,12 @@ var worker_default = { async fetch(request, env) {
       const b = await request.json();
       const email = String(b.email || "").trim().toLowerCase();
       if (!validEmail(email)) return json({ok:false,error:"Adresse email invalide"},400);
+      if (env.CONTACT_OPTIN_MODE === "direct" && (!env.RESEND_API_KEY || !env.UNSUBSCRIBE_FROM_EMAIL)) {
+        // Queue a private request for the administrator; never deactivate via a bare address.
+        await env.DB.prepare("INSERT INTO messages(prenom,contact,message,lu,date_creation) VALUES(?,?,?,0,CURRENT_TIMESTAMP)")
+          .bind("Désinscription",email,"Demande de désinscription reçue depuis le formulaire public. Vérifier la demande avant de désactiver le contact.").run();
+        return json({ok:true,message:"Demande de désinscription transmise à l’équipe. Elle doit encore être traitée."});
+      }
       // A mail provider is required; never promise an email that cannot be delivered.
       if (!env.RESEND_API_KEY || !env.UNSUBSCRIBE_FROM_EMAIL) return json({ok:false,error:"Confirmation par email indisponible pour le moment."},503);
       const existing = await env.DB.prepare("SELECT id FROM contacts WHERE email=? AND active=1 LIMIT 1").bind(email).first();
