@@ -7,6 +7,7 @@
  const container=document.createElement('div');container.className='published-media-list';container.style.cssText='margin-top:16px';
  panel.append(container);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function downloadPublished(item,button){const old=button.textContent;button.disabled=true;button.textContent='Téléchargement…';try{const url=api+'/api/published/file?id='+encodeURIComponent(item.id);const response=await fetch(url,{credentials:'include'});if(!response.ok)throw Error('Fichier indisponible ('+response.status+')');const blob=await response.blob();const objectUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=objectUrl;a.download=(item.original_name||'piece-jointe').replace(/[\\/]/g,'_');document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),60000)}catch(err){alert('Téléchargement impossible : '+err.message)}finally{button.disabled=false;button.textContent=old}}
  async function call(path,options={}){const r=await fetch(api+path,{credentials:'include',...options});const d=await r.json();if(!r.ok||d.ok===false)throw Error(d.error||'Erreur serveur');return d}
  function field(form,label,value,type='text'){const wrap=document.createElement('label');wrap.textContent=label+' ';const input=document.createElement('input');input.type=type;if(type==='checkbox')input.checked=!!value;else input.value=value||'';wrap.append(input);form.append(wrap);return input}
  async function refresh(){
@@ -17,7 +18,7 @@
     const url=api+'/api/published/file?id='+encodeURIComponent(item.id);
     const title=document.createElement('strong');title.textContent=item.title||item.original_name||'Sans titre';card.append(title);
     
-    const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';card.append(link);
+    const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';card.append(link);const download=document.createElement('button');download.type='button';download.textContent='Télécharger le fichier';download.style.marginLeft='12px';download.onclick=()=>downloadPublished(item,download);card.append(download);
     const form=document.createElement('form');form.style.cssText='display:flex;flex-direction:column;gap:10px;margin-top:12px';
     const titleInput=field(form,'Titre',item.title||item.original_name||'');titleInput.maxLength=120;
     
