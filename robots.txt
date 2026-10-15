@@ -13,4 +13,4 @@ Disallow: /admin-videos.html
 Disallow: /d1-test.html
 Disallow: /worker-test.html
 
-Sitemap: https://baletisauvage.github.io/sitemap.xml
+Sitemap: https://baletisauvage.github.io/Baleti-Sauvage-Montpellier/sitemap.xml
