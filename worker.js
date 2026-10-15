@@ -877,7 +877,11 @@ var worker_default = { async scheduled(event, env) {
     if (p === "/api/contacts" && request.method === "POST") {
       if (await publicRateLimited(request, env, "contacts")) return json({ok:false,error:"Trop de demandes. Réessaie dans une heure."},429);
       const b = await request.json(), c = contactPayload(b);
-      if (!c || b.consent !== true || !c.email) return json({ok:false,error:"Prénom, adresse email valide et consentement explicite obligatoires. L'inscription par téléphone seul n'est pas disponible."},400);
+      if (!c || b.consent !== true) return json({ok:false,error:"Prénom et au moins un e-mail ou téléphone valide obligatoires."},400);
+      if (!c.email) {
+        await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active) SELECT ?,'',?,1,1 WHERE NOT EXISTS(SELECT 1 FROM contacts WHERE telephone=? AND email='')").bind(c.prenom,c.telephone,c.telephone).run();
+        return json({ok:true,message:"Coordonnées enregistrées."});
+      }
       if (env.CONTACT_OPTIN_MODE === "direct") {
         // Atomic insert only: public requests cannot edit or reactivate existing contacts.
         await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active) SELECT ?,?,?,1,1 WHERE NOT EXISTS(SELECT 1 FROM contacts WHERE email=?)")
