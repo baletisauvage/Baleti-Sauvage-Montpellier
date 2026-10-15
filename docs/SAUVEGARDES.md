@@ -22,3 +22,21 @@ Le site dépend de quatre éléments : dépôt GitHub, Worker Cloudflare, base C
 - [ ] Personne responsable désignée
 
 Ne pas considérer GitHub comme une sauvegarde complète de la base et des médias.
+
+## Inventaire Cloudflare vérifié le 15 octobre 2026
+
+- Base principale D1 : `baleti-sauvage-db` (identifiant `163fef81-98d6-4d67-b3d5-357aacb7794c`).
+- Base de test D1 : `baleti-sauvage-test-v71` (identifiant `e1d784a9-1d5a-42cc-91a2-f47ee82b9aa8`).
+- Compte Cloudflare : `e20930aab9d032839230bb25349916d9`.
+
+Ces identifiants sont des références de configuration, pas des clés d'accès.
+
+## Précautions pour l'export D1
+
+L'API Cloudflare D1 dispose d'une opération d'export SQL, mais l'export peut temporairement rendre la base indisponible aux requêtes. Pour une première vérification, privilégier la base de test et un créneau de maintenance. Lancer un export n'est pas équivalent à disposer d'une sauvegarde : il faut récupérer le fichier SQL, le stocker dans un emplacement privé et valider sa restauration.
+
+**Aucun export D1 n'a été lancé lors de cette préparation.**
+
+## Backblaze B2
+
+L'inventaire des objets B2 et la vérification d'une copie indépendante restent à réaliser. Les objets B2 doivent être sauvegardés avec leurs références D1 et les manifestes de galerie.
