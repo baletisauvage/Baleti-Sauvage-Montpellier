@@ -1042,7 +1042,12 @@ var worker_default = { async scheduled(event, env) {
     }
     if (p === "/api/login" && request.method === "POST") {
 
-      const b = await request.json(), k = await rateKey(request, env);
+      const k = await rateKey(request, env);
+      if (await blocked(env, k)) return json({ ok: false, error: "Trop de tentatives. Réessaie dans quelques minutes." }, 429);
+      const rawLogin = await request.text();
+      if (rawLogin.length > 1024) return json({ ok: false, error: "Requête trop longue" }, 413);
+      let b; try { b = JSON.parse(rawLogin); } catch { return json({ ok: false, error: "Requête invalide" }, 400); }
+      if (!b || typeof b !== "object" || Array.isArray(b) || typeof b.password !== "string" || b.password.length > 256) return json({ ok: false, error: "Requête invalide" }, 400);
 
       if (await blocked(env, k)) return json({ ok: false, error: "Trop de tentatives. R\xE9essaie dans quelques minutes." }, 429);
 
