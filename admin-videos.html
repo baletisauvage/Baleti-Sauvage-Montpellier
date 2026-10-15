@@ -7,7 +7,7 @@
  section.style.cssText='display:contents';
  const gallery=document.getElementById('list');
  if(!gallery) return;
- gallery.insertAdjacentElement('afterend',section);
+ gallery.appendChild(section);
  const target=section;
  const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  async function request(path,options={}){
