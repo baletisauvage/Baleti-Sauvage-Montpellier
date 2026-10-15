@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Balèti Sauvage Montpellier",
+  "short_name": "Balèti Sauvage",
+  "description": "Les rendez-vous, photos, vidéos et nouvelles du Balèti Sauvage à Montpellier.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "prefer_related_applications": false,
+  "icons": [
+    {"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}
