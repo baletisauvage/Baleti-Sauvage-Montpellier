@@ -40,3 +40,9 @@ La page `admin-forum.html` est déjà liée au menu d'administration. Elle néce
 Le schéma du forum a été appliqué à la base D1 de test `baleti-sauvage-test-v71`. Une lecture de `sqlite_master` confirme la présence de `forum_posts` et `forum_limits`. La liaison `DB` du Worker de production pointe vers `baleti-sauvage-db` ; elle n'a pas été modifiée. Aucun message de test n'a été ajouté à la base principale.
 
 Les tests de publication, de modération, de limitation de débit et d'expiration restent à exécuter après intégration des routes. La migration de production n'a pas été lancée.
+
+## Essai de stockage D1 du 15 octobre 2026
+
+Un enregistrement technique temporaire a été inséré dans `forum_posts` sur la base de test. La lecture a retourné 1 résultat, puis la suppression a ramené le nombre à 0. Ces opérations ont réussi. **Ce test ne vérifie pas les routes HTTP, l'authentification, la limitation des publications ni l'expiration automatique.**
+
+Le module API a été renforcé pour rejeter les origines de navigateur non autorisées et les corps JSON malformés. Le déploiement Worker reste à effectuer après vérification de la compatibilité avec les liaisons et les contrôles de session existants.
