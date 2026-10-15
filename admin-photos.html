@@ -4,12 +4,10 @@
  const api='https://baleti-sauvage.baletisauvage.workers.dev';
  const gallery=document.getElementById('list'),editor=document.getElementById('editor');
  if(!gallery||!editor)return;
- const container=document.createElement('div');container.style.display='contents';
+ const container=document.createElement('div');container.className='gallery';container.style.cssText='margin-top:14px';const panel=document.getElementById('panel-gallery');panel.append(container);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  async function call(path,options={}){const r=await fetch(api+path,{credentials:'include',...options});const d=await r.json();if(!r.ok||d.ok===false)throw Error(d.error||'Erreur serveur');return d}
- const observer=new MutationObserver(()=>{if(!gallery.contains(container))gallery.append(container)});
- observer.observe(gallery,{childList:true});
- gallery.append(container);
+ 
  async function refresh(){
   try{
    const data=await call('/api/published/admin');
@@ -23,7 +21,7 @@
     card.onclick=open;card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};
     container.append(card);
    }
-  }catch(e){console.error('Publications des messages',e)}
+  }catch(e){container.textContent='Impossible de charger les photos publiées depuis les messages : '+e.message;console.error('Publications des messages',e)}
  }
  function openEditor(item,url){
   editor.classList.add('active');
