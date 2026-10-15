@@ -4,7 +4,7 @@
 export async function forumRoute(request,env,isAdmin) {
  const url=new URL(request.url),p=url.pathname;
  if(p!=='/api/forum'&&p!=='/api/forum/admin'&&p!=='/api/forum/moderate') return null;
- const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Access-Control-Allow-Origin':'https://baletisauvage.github.io','Vary':'Origin'};
+ const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Access-Control-Allow-Origin':'https://baletisauvage.github.io','Access-Control-Allow-Credentials':'true','Vary':'Origin'};
  const respond=(obj,status=200)=>new Response(JSON.stringify(obj),{status,headers});
  const now=Date.now(),ttl=72*60*60*1000;
  const origin=request.headers.get('Origin');
