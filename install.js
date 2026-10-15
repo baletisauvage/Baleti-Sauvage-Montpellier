@@ -13,12 +13,13 @@
   let promptEvent=null;
   const iconUrl=new URL('favicon_baleti_original.ico',document.baseURI).href;
   const setButton=label=>{
-    const icon=document.createElement('img');icon.src=iconUrl;icon.alt='';icon.width=28;icon.height=28;icon.draggable=false;
-    const text=document.createElement('span');text.textContent=label;button.replaceChildren(icon,text);
-    button.style.cssText='display:flex;align-items:center;justify-content:center;gap:12px;white-space:normal;line-height:1.4';
+    const icon=document.createElement('img');icon.src=iconUrl;icon.alt='';icon.width=32;icon.height=32;icon.draggable=false;
+    const text=document.createElement('span');text.textContent=label;const arrow=document.createElement('span');arrow.className='install-arrow';arrow.setAttribute('aria-hidden','true');arrow.textContent='↗';button.replaceChildren(icon,text,arrow);
     button.disabled=false;
   };
-  const defaultLabel=mobile?'AJOUTER À L’ÉCRAN D’ACCUEIL':windows?'AJOUTER À LA BARRE DES TÂCHES':mac?'AJOUTER AU DOCK':'INSTALLER BALÈTI';
+  const defaultLabel='Installer Balèti';
+  const destination=document.getElementById('installDestination');
+  if(destination)destination.textContent=mobile?'Retrouve son icône sur ton écran d’accueil.':windows?'Retrouve son icône dans ta barre des tâches.':mac?'Retrouve son icône dans le Dock.':'Ouvre le site en un clic depuis son icône.';
   const guide=(title,steps,detail='',url='')=>{
     let box=document.getElementById('baletiInstallGuide');
     if(!box){box=document.createElement('section');box.id='baletiInstallGuide';help.parentNode.insertBefore(box,help.nextSibling);}
@@ -71,13 +72,13 @@
   };
   const updateInstalled=()=>{
     if(!installed()){setButton(defaultLabel);return;}
-    if(windows){setButton('ÉPINGLER À LA BARRE DES TÂCHES');help.textContent='Balèti est ouvert comme application. Tu peux maintenant conserver son icône dans la barre des tâches.';}
-    else{setButton('BALÈTI EST INSTALLÉ');button.disabled=true;help.textContent='Tu ouvres déjà Balèti depuis son icône.';}
+    if(windows){setButton('Épingler Balèti');help.textContent='Balèti est ouvert comme application. Tu peux maintenant conserver son icône dans la barre des tâches.';}
+    else{setButton('Balèti est installé');button.disabled=true;help.textContent='Tu ouvres déjà Balèti depuis son icône.';}
   };
   help.setAttribute('role','status');help.setAttribute('aria-live','polite');
   setButton(defaultLabel);
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();promptEvent=event;setButton(defaultLabel);});
-  window.addEventListener('appinstalled',()=>{installedHere=true;promptEvent=null;if(windows){setButton('ÉPINGLER À LA BARRE DES TÂCHES');help.textContent='L’installation a été acceptée. L’épinglage à la barre des tâches est une étape distincte.';pinWindows();}else{setButton('BALÈTI EST INSTALLÉ');button.disabled=true;help.textContent='Installation acceptée. Retrouve l’icône Balèti sur ton appareil.';}});
+  window.addEventListener('appinstalled',()=>{installedHere=true;promptEvent=null;if(windows){setButton('Épingler Balèti');help.textContent='L’installation a été acceptée. L’épinglage à la barre des tâches est une étape distincte.';pinWindows();}else{setButton('Balèti est installé');button.disabled=true;help.textContent='Installation acceptée. Retrouve l’icône Balèti sur ton appareil.';}});
   if(standalone.addEventListener)standalone.addEventListener('change',updateInstalled);
   button.onclick=async()=>{
     if(windows&&installed()){showGuide();return;}
