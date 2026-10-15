@@ -1,95 +1,94 @@
 (() => {
   'use strict';
-  const button = document.getElementById('installSite');
-  const help = document.getElementById('contactHelp');
-  if (!button || !help) return;
-  let pendingPrompt = null;
-  const firefox = /Firefox\//.test(navigator.userAgent);
-  const desktop = !/Android|iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (firefox && desktop) button.textContent = '📲 AJOUTER BALÈTI';
-  const showDesktopShortcut = () => {
-    if (document.getElementById('baletiDesktopShortcut')) return;
-    const box = document.createElement('div');
-    box.id = 'baletiDesktopShortcut';
-    box.style.cssText = 'margin-top:16px;padding:12px;border:1px solid currentColor';
-    const link = document.createElement('a');
-    link.href = new URL('./', document.baseURI).href;
-    link.draggable = true;
-    link.title = 'Glisser ce lien sur le bureau pour créer le raccourci Balèti';
-    link.style.cssText = 'display:inline-flex;align-items:center;gap:12px;color:inherit;font-weight:800;text-decoration:underline';
-    const icon = document.createElement('img');
-    icon.src = new URL('favicon_baleti_original.ico', document.baseURI).href;
-    icon.alt = '';
-    icon.draggable = false;
-    icon.style.pointerEvents = 'none';
-    icon.width = 56;
-    icon.height = 56;
-    link.appendChild(icon);
-    link.appendChild(document.createTextNode('Balèti Sauvage Montpellier'));
-    const note = document.createElement('p');
-    note.textContent = 'Pour créer un raccourci sur le bureau : réduis la fenêtre de Firefox, puis fais glisser cette icône vers une zone libre du bureau.';
-    note.style.cssText = 'font-size:14px;line-height:1.5;margin:12px 0 0';
-    box.appendChild(link);
-    box.appendChild(note);
-    help.parentNode.insertBefore(box, help.nextSibling);
+  const button=document.getElementById('installSite'),help=document.getElementById('contactHelp');
+  if(!button||!help)return;
+  const ua=navigator.userAgent,platform=navigator.platform||'';
+  const ios=/iPhone|iPad|iPod/.test(ua)||(platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const android=/Android/.test(ua),mobile=ios||android;
+  const windows=!mobile&&/Win/.test(platform),mac=!mobile&&/Mac/.test(platform);
+  const firefox=/Firefox\//.test(ua),safari=/Safari/.test(ua)&&!/Chrome|Chromium|Edg/.test(ua);
+  const standalone=window.matchMedia('(display-mode: standalone)');
+  let installedHere=false;
+  const installed=()=>installedHere||standalone.matches||navigator.standalone===true;
+  let promptEvent=null;
+  const iconUrl=new URL('favicon_baleti_original.ico',document.baseURI).href;
+  const setButton=label=>{
+    const icon=document.createElement('img');icon.src=iconUrl;icon.alt='';icon.width=28;icon.height=28;icon.draggable=false;
+    const text=document.createElement('span');text.textContent=label;button.replaceChildren(icon,text);
+    button.style.cssText='display:flex;align-items:center;justify-content:center;gap:12px;white-space:normal;line-height:1.4';
+    button.disabled=false;
   };
-  const standalone = window.matchMedia('(display-mode: standalone)');
-  const installed = () => standalone.matches || navigator.standalone === true;
-  const showInstalled = () => {
-    if (!installed()) return;
-    button.textContent = '✓ BALÈTI EST INSTALLÉ';
-    button.disabled = true;
-    help.textContent = 'Tu ouvres déjà Balèti depuis son icône.';
+  const defaultLabel=mobile?'AJOUTER À L’ÉCRAN D’ACCUEIL':windows?'AJOUTER À LA BARRE DES TÂCHES':mac?'AJOUTER AU DOCK':'INSTALLER BALÈTI';
+  const guide=(title,steps,detail='',url='')=>{
+    let box=document.getElementById('baletiInstallGuide');
+    if(!box){box=document.createElement('section');box.id='baletiInstallGuide';help.parentNode.insertBefore(box,help.nextSibling);}
+    box.replaceChildren();box.style.cssText='margin-top:16px;padding:18px;border:1px solid currentColor;line-height:1.6';
+    const heading=document.createElement('h4');heading.textContent=title;heading.style.cssText='margin:0 0 12px;font-size:17px';
+    const preview=document.createElement('img');preview.src=iconUrl;preview.alt='Icône Balèti Sauvage';preview.width=56;preview.height=56;preview.draggable=false;preview.style.cssText='display:block;margin:0 0 14px';
+    const list=document.createElement('ol');list.style.cssText='margin:0;padding-left:24px';
+    for(const text of steps){const li=document.createElement('li');li.textContent=text;li.style.marginBottom='10px';list.appendChild(li);}
+    box.append(heading,preview,list);
+    if(detail){const p=document.createElement('p');p.textContent=detail;p.style.cssText='font-size:13px;margin:14px 0 0';box.appendChild(p);}
+    if(url){const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Voir les étapes illustrées de Firefox';link.style.cssText='display:inline-block;color:inherit;text-decoration:underline;margin-top:12px';box.appendChild(link);}
   };
-  help.setAttribute('role', 'status');
-  help.setAttribute('aria-live', 'polite');
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    pendingPrompt = event;
-    button.disabled = false;
-    button.textContent = '📲 INSTALLER BALÈTI';
-  });
-  window.addEventListener('appinstalled', () => {
-    pendingPrompt = null;
-    button.textContent = '✓ BALÈTI EST INSTALLÉ';
-    button.disabled = true;
-    help.textContent = 'Balèti est installé. Retrouve son icône sur ton appareil.';
-  });
-  if (standalone.addEventListener) standalone.addEventListener('change', showInstalled);
-  button.onclick = async () => {
-    if (installed()) { showInstalled(); return; }
-    if (pendingPrompt) {
-      const prompt = pendingPrompt;
-      pendingPrompt = null;
-      button.disabled = true;
-      try {
-        await prompt.prompt();
-        const choice = await prompt.userChoice;
-        help.textContent = choice.outcome === 'accepted'
-          ? 'Installation acceptée. Ton appareil prépare l’icône Balèti.'
-          : 'Installation annulée. Tu peux continuer à utiliser le site.';
-      } catch (_) {
-        help.textContent = 'Ouvre le menu de ton navigateur et choisis « Installer l’application » si cette option est proposée.';
-      } finally { if (!installed()) button.disabled = false; }
+  const pinWindows=()=>guide('Garder l’icône Balèti dans la barre des tâches',[
+    'Ouvre l’application Balèti Sauvage.',
+    'Dans la barre des tâches Windows, fais un clic droit sur son icône Balèti.',
+    'Choisis « Épingler à la barre des tâches ». L’icône restera présente après la fermeture.'
+  ]);
+  const showGuide=()=>{
+    help.textContent='';
+    if(windows&&installed()){pinWindows();return;}
+    if(ios){guide('L’icône Balèti sur l’écran d’accueil',[
+      'Dans le navigateur, ouvre le menu Partager.',
+      'Choisis « Sur l’écran d’accueil ». Selon le navigateur, cette option peut se trouver dans son menu.',
+      'Confirme avec « Ajouter ». Ouvre ensuite Balèti depuis son icône.'
+    ]);return;}
+    if(windows&&firefox){guide('Installer Balèti dans la barre des tâches',[
+      'En haut de Firefox, clique sur le bouton « Applications web » dans la barre d’adresse.',
+      'Firefox ajoute Balèti comme application, avec son icône, et l’ouvre dans sa propre fenêtre.',
+      'Si Windows te propose d’épingler l’application à la barre des tâches, clique sur « Oui ». Sinon, fais un clic droit sur l’icône Balèti ouverte puis choisis « Épingler à la barre des tâches ».'
+    ],'Cette fonction demande Firefox 143 ou plus récent sous Windows, ou Firefox 150 si installé depuis le Microsoft Store. Elle n’est pas disponible en navigation privée. Le site ne peut pas cliquer sur les commandes Firefox ou Windows à ta place.','https://support.mozilla.org/fr/kb/applications-web-firefox-windows');return;}
+    if(mac&&safari){guide('L’icône Balèti dans le Dock',[
+      'Dans Safari, ouvre le menu « Fichier ».',
+      'Choisis « Ajouter au Dock », puis confirme le nom Balèti Sauvage.',
+      'Ouvre ensuite le site depuis son icône dans le Dock.'
+    ]);return;}
+    if(firefox&&!mobile){guide('Installer Balèti sur cet ordinateur',[
+      'L’installation d’applications web de Firefox est disponible sous Windows ; elle n’est pas proposée dans Firefox sur macOS ou Linux.',
+      'Ouvre le site dans un navigateur prenant en charge l’installation, comme Chrome ou Edge, puis utilise son option d’installation.'
+    ]);return;}
+    if(android){guide('L’icône Balèti sur l’écran d’accueil',[
+      'Ouvre le menu du navigateur.',
+      'Choisis « Installer l’application » ou « Ajouter à l’écran d’accueil », selon l’option proposée.',
+      'Confirme l’ajout, puis ouvre Balèti depuis son icône.'
+    ]);return;}
+    guide(windows?'Installer Balèti dans la barre des tâches':'Installer Balèti sur cet appareil',[
+      'Utilise l’option d’installation du site dans la barre d’adresse ou dans le menu du navigateur.',
+      'Confirme l’installation de Balèti Sauvage.',
+      windows?'Dans la barre des tâches, fais un clic droit sur l’icône Balèti ouverte et choisis « Épingler à la barre des tâches ».':'Ouvre Balèti depuis l’icône créée par le navigateur.'
+    ]);
+  };
+  const updateInstalled=()=>{
+    if(!installed()){setButton(defaultLabel);return;}
+    if(windows){setButton('ÉPINGLER À LA BARRE DES TÂCHES');help.textContent='Balèti est ouvert comme application. Tu peux maintenant conserver son icône dans la barre des tâches.';}
+    else{setButton('BALÈTI EST INSTALLÉ');button.disabled=true;help.textContent='Tu ouvres déjà Balèti depuis son icône.';}
+  };
+  help.setAttribute('role','status');help.setAttribute('aria-live','polite');
+  setButton(defaultLabel);
+  window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();promptEvent=event;setButton(defaultLabel);});
+  window.addEventListener('appinstalled',()=>{installedHere=true;promptEvent=null;if(windows){setButton('ÉPINGLER À LA BARRE DES TÂCHES');help.textContent='L’installation a été acceptée. L’épinglage à la barre des tâches est une étape distincte.';pinWindows();}else{setButton('BALÈTI EST INSTALLÉ');button.disabled=true;help.textContent='Installation acceptée. Retrouve l’icône Balèti sur ton appareil.';}});
+  if(standalone.addEventListener)standalone.addEventListener('change',updateInstalled);
+  button.onclick=async()=>{
+    if(windows&&installed()){showGuide();return;}
+    if(promptEvent){const event=promptEvent;promptEvent=null;button.disabled=true;
+      try{await event.prompt();const choice=await event.userChoice;if(choice.outcome==='accepted'){help.textContent='Installation acceptée.';if(windows)pinWindows();}else help.textContent='Installation annulée. Tu peux continuer à utiliser le site.';}
+      catch(_){showGuide();}
+      finally{if(!installed()||windows)button.disabled=false;}
       return;
     }
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (ios) {
-      help.textContent = 'Sur iPhone ou iPad : ouvre le menu Partager, choisis « Sur l’écran d’accueil », puis confirme avec « Ajouter ». L’icône Balèti ouvrira directement le site.';
-    } else if (firefox && desktop) {
-      help.textContent = /Win/.test(navigator.platform)
-        ? 'Firefox sous Windows : clique sur le bouton « Applications web » dans la barre d’adresse pour installer Balèti et l’ajouter à la barre des tâches. Si ce bouton n’est pas proposé, crée le raccourci bureau avec l’icône ci-dessous.'
-        : 'Dans Firefox, crée un raccourci en faisant glisser le lien Balèti ci-dessous sur le bureau.';
-      showDesktopShortcut();
-    } else if (/Mac/.test(navigator.platform) && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg/.test(navigator.userAgent)) {
-      help.textContent = 'Dans Safari sur Mac : choisis Fichier → Ajouter au Dock, puis confirme. L’icône Balèti ouvrira le site dans sa propre fenêtre.';
-    } else {
-      help.textContent = 'Si aucune fenêtre d’installation ne s’ouvre, ouvre le menu de ton navigateur et choisis « Installer l’application » ou « Ajouter à l’écran d’accueil » si proposé. Tu peux aussi ouvrir ce site dans Chrome ou Edge.';
-    }
+    showGuide();
   };
-  showInstalled();
-  if ('serviceWorker' in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register('./sw.js', {scope: './', updateViaCache: 'none'})
-      .catch(error => console.error('Installation Balèti : service worker indisponible', error));
-  }
+  updateInstalled();
+  if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'}).catch(error=>console.error('Installation Balèti : service worker indisponible',error));
 })();
