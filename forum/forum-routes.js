@@ -30,11 +30,19 @@ export async function forumRoute(request,env,isAdmin) {
   ]);
   return respond({ok:true,id,expires_at:expiry},201);
  }
+ if(request.method==='GET'&&p==='/api/forum/admin'){
+  if(!await isAdmin(request,env))return respond({ok:false,error:'Accès refusé'},403);
+  const rows=await env.DB.prepare('SELECT id,parent_id,nickname,body,created_at,expires_at,hidden FROM forum_posts ORDER BY created_at DESC LIMIT 200').all();
+  return respond({ok:true,posts:rows.results});
+ }
  if(request.method==='POST'&&p==='/api/forum/moderate'){
   if(!await isAdmin(request,env))return respond({ok:false,error:'Accès refusé'},403);
-  const data=await request.json();if(!/^[0-9a-f-]{36}$/.test(String(data.id||'')))return respond({ok:false,error:'Identifiant invalide'},400);
+  const raw=await request.text();if(raw.length>500)return respond({ok:false,error:'Requête trop longue'},413);
+  let data;try{data=JSON.parse(raw)}catch{return respond({ok:false,error:'JSON invalide'},400)}
+  if(!/^[0-9a-f-]{36}$/.test(String(data.id||'')))return respond({ok:false,error:'Identifiant invalide'},400);
   await env.DB.prepare('UPDATE forum_posts SET hidden=1 WHERE id=? OR parent_id=?').bind(data.id,data.id).run();
   return respond({ok:true});
  }
+ if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, X-Admin-Token'}});
  return respond({ok:false,error:'Méthode inconnue'},405);
 }
