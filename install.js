@@ -20,6 +20,8 @@
     const icon = document.createElement('img');
     icon.src = new URL('favicon_baleti_original.ico', document.baseURI).href;
     icon.alt = '';
+    icon.draggable = false;
+    icon.style.pointerEvents = 'none';
     icon.width = 56;
     icon.height = 56;
     link.appendChild(icon);
