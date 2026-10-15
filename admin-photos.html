@@ -5,7 +5,7 @@
  const section=document.createElement('section');
  section.style.cssText='max-width:1050px;margin:20px auto;padding:18px;border:1px solid #aaa5;border-radius:12px';
  section.innerHTML='<h2>Publications enregistrées depuis les messages</h2><div id="published-message-media">Chargement…</div>';
- document.querySelector('main')?.appendChild(section);
+ (document.querySelector('main')||document.body).appendChild(section);
  const target=section.querySelector('#published-message-media');
  const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  async function request(path,options={}){
@@ -27,7 +27,7 @@
     const link=document.createElement('a');link.href=api+'/api/published/file?id='+encodeURIComponent(item.id);link.target='_blank';link.rel='noopener noreferrer';link.textContent='Voir / télécharger';line.append(link);
     const remove=document.createElement('button');remove.type='button';remove.textContent='Supprimer';
     remove.onclick=async()=>{if(!confirm('Supprimer définitivement cette publication du site ?'))return;remove.disabled=true;try{await request('/api/published/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id})});await refresh()}catch(e){alert(e.message);remove.disabled=false}};
-    const edit=document.createElement('button');edit.type='button';edit.textContent='Modifier le titre';edit.onclick=async()=>{const title=prompt('Nouveau titre de la publication',item.title||item.original_name||'');if(title===null)return;if(!title.trim()){alert('Le titre est obligatoire.');return;}edit.disabled=true;try{await request('/api/published/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,title:title.trim()})});await refresh()}catch(e){alert(e.message);edit.disabled=false}};line.append(edit);line.append(remove);target.append(line);
+    const edit=document.createElement('button');edit.type='button';edit.textContent='Modifier le titre';edit.textContent='Modifier la publication';edit.onclick=async()=>{const title=prompt('Titre',item.title||item.original_name||'');if(title===null)return;if(!title.trim()){alert('Titre obligatoire');return;}const credit=prompt('Crédit / auteur',item.credit||'');if(credit===null)return;const date_media=prompt('Date (AAAA-MM-JJ, facultative)',item.date_media||'');if(date_media===null)return;const visible=confirm('Rendre cette publication visible sur le site ?\nOK = visible, Annuler = masquée');const principale=confirm('Mettre cette publication à la une ?\nOK = oui, Annuler = non');edit.disabled=true;try{await request('/api/published/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,title:title.trim(),credit,date_media,visible,principale})});await refresh()}catch(e){alert(e.message);edit.disabled=false}};line.append(edit);line.append(remove);target.append(line);
    }
   }catch(e){target.textContent='Impossible de charger les publications : '+e.message}
  }
