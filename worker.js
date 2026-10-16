@@ -1062,18 +1062,6 @@ var worker_default = { async scheduled(event, env) {
     }
 
     if (!await auth(request, env)) return json({ ok: false, error: "Non autoris\xE9" }, 401);
-    if(p==='/api/admin/papers/preview'&&request.method==='GET'){
-      const file=new URL(request.url).searchParams.get('file')||'';
-      if(!/^[a-zA-Z0-9_.-]{1,180}$/.test(file))return json({ok:false,error:'Fichier invalide'},400);
-      const manifest=await arrayData(env,PAPER_MANIFEST);
-      if(!manifest.items.some(x=>x&&x.fichier===file))return json({ok:false,error:'Papier introuvable'},404);
-      const indexed=await env.DB.prepare('SELECT b2_file_id,b2_file_name,mime_type FROM b2_file_index WHERE logical_key=?').bind('media:papiers:'+file).first();
-      if(!indexed||indexed.b2_file_name!=='media/papiers/'+file)return json({ok:false,error:'Fichier absent de B2'},404);
-      const b2=await v71B2Auth(env);
-      const upstream=await fetch(b2.api+'/b2api/v2/b2_download_file_by_id?fileId='+encodeURIComponent(indexed.b2_file_id),{headers:{Authorization:b2.token}});
-      if(!upstream.ok)return json({ok:false,error:'Lecture B2 HTTP '+upstream.status},502);
-      return new Response(upstream.body,{status:200,headers:headers({'Content-Type':indexed.mime_type||'application/pdf','Content-Disposition':'inline; filename="'+file+'"','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})});
-    }
     if(p==='/api/admin/storage'&&request.method==='GET')return json(await storageReport(env,false));
     if(p==='/api/admin/storage/refresh'&&request.method==='POST')return json(await storageReport(env,true));
 
