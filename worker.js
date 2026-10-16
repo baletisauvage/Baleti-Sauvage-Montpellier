@@ -1031,6 +1031,16 @@ var worker_default = { async scheduled(event, env) {
 
     }
 
+    if (p === "/api/visits" && request.method === "POST") {
+      const month = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit'}).format(new Date()).slice(0,7);
+      await env.DB.prepare("INSERT INTO site_monthly_visits(month,visits) VALUES(?,1) ON CONFLICT(month) DO UPDATE SET visits=visits+1").bind(month).run();
+      return json({ok:true});
+    }
+    if (p === "/api/visits/admin" && request.method === "GET") {
+      if (!await auth(request,env)) return json({ok:false,error:"Non autorisé"},401);
+      const rows=await env.DB.prepare("SELECT month,visits FROM site_monthly_visits ORDER BY month ASC").all();
+      return json({ok:true,months:rows.results||[]});
+    }
     if (p === "/api/session" && request.method === "GET") return json({ ok: true, authenticated: await auth(request, env) });
 
     if (p === "/api/logout" && request.method === "POST") {
