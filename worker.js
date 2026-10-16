@@ -987,7 +987,7 @@ var worker_default = { async scheduled(event, env) {
       // These rows are independent of their source messages and survive message deletion.
       let published = [];
       try {
-        published = (await env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all()).results || [];
+        published = (await env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale,published_at FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all()).results || [];
       } catch (error) {
         console.error("Published gallery metadata unavailable", error);
         return json({ok:false,error:"Publications temporairement indisponibles"},503,{"Cache-Control":"no-store"});
