@@ -198,6 +198,7 @@ __name(ensureColumns, "ensureColumns");
 
 async function init(DB) {
   await DB.prepare('CREATE TABLE IF NOT EXISTS storage_usage_cache(resource TEXT PRIMARY KEY,payload TEXT NOT NULL)').run();
+  await DB.prepare("CREATE TABLE IF NOT EXISTS site_monthly_unique(month TEXT NOT NULL,visitor_hash TEXT NOT NULL,PRIMARY KEY(month,visitor_hash))").run();
 
   await DB.batch([DB.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS event_overrides (event_date TEXT PRIMARY KEY,time TEXT,place TEXT,lat REAL,lng REAL,comment TEXT DEFAULT '',cancelled INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS locations (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,lat REAL,lng REAL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_login_rate (key TEXT PRIMARY KEY,failures INTEGER NOT NULL DEFAULT 0,first_failure INTEGER NOT NULL,last_failure INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,prenom TEXT NOT NULL,contact TEXT DEFAULT '',message TEXT NOT NULL,date_creation TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,lu INTEGER NOT NULL DEFAULT 0)"), DB.prepare("CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, prenom TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', telephone TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS public_request_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS unsubscribe_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS contact_optin_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, prenom TEXT NOT NULL, telephone TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)")]);
 
@@ -1033,7 +1034,18 @@ var worker_default = { async scheduled(event, env) {
 
     if (p === "/api/visits" && request.method === "POST") {
       const month = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit'}).format(new Date()).slice(0,7);
-      await env.DB.prepare("INSERT INTO site_monthly_visits(month,visits) VALUES(?,1) ON CONFLICT(month) DO UPDATE SET visits=visits+1").bind(month).run();
+      const origin = request.headers.get("Origin");
+      if (origin !== SITE) return json({ok:false,error:"Origine refusée"},403);
+      const body = await request.json().catch(()=>null);
+      const visitorId = body && body.visitorId;
+      if (typeof visitorId !== "string" || !/^[a-f0-9]{32}$/.test(visitorId)) return json({ok:false,error:"Identifiant invalide"},400);
+      // Empreinte mensuelle : aucun identifiant brut ni adresse IP en base.
+      const visitorHash = await hash(month + ":" + visitorId + ":" + env.ADMIN_PASSWORD);
+      const inserted = await env.DB.prepare("INSERT OR IGNORE INTO site_monthly_unique(month,visitor_hash) VALUES(?,?)").bind(month,visitorHash).run();
+      if (inserted.meta?.changes === 1) {
+        await env.DB.prepare("INSERT INTO site_monthly_visits(month,visits) VALUES(?,1) ON CONFLICT(month) DO UPDATE SET visits=visits+1").bind(month).run();
+      }
+      await env.DB.prepare("DELETE FROM site_monthly_unique WHERE month < ?").bind(month).run();
       return json({ok:true});
     }
     if (p === "/api/visits/admin" && request.method === "GET") {
