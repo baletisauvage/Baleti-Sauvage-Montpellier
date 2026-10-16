@@ -694,7 +694,7 @@ function contactPayload(b) {
 }
 function attachmentAllowed(file) {
   const ext = String(file.name || "").split(".").pop().toLowerCase();
-  const types = {jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",pdf:"application/pdf",txt:"text/plain",mp4:"video/mp4",webm:"video/webm",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",odt:"application/vnd.oasis.opendocument.text",rtf:"application/rtf"};
+  const types = {jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",pdf:"application/pdf",txt:"text/plain",mp4:"video/mp4",webm:"video/webm",mov:"video/quicktime",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",odt:"application/vnd.oasis.opendocument.text",rtf:"application/rtf"};
   return !!types[ext] && (!file.type || file.type === types[ext] || file.type === "application/octet-stream");
 }
 // Phase 5: public submission throttling and binary signature checks.
@@ -724,6 +724,7 @@ function validFileSignature(file, bytes) {
   if (ext === "rtf") return new TextDecoder().decode(b.slice(0,5)) === "{\\rtf";
   if (ext === "txt") return !b.includes(0);
   if (ext === "webm") return begins(0x1a,0x45,0xdf,0xa3);
+  if (ext === "mov") return b.length >= 12 && String.fromCharCode(...b.slice(4,8)) === "ftyp" && /qt  /.test(new TextDecoder().decode(b.slice(8,32)));
   if (ext === "mp4") return b.length >= 12 && begins(0x00,0x00,0x00) &&
     String.fromCharCode(...b.slice(4,8)) === "ftyp";
   // Other document types require more complete container validation; do not
@@ -822,30 +823,12 @@ var worker_default = { async scheduled(event, env) {
     if (p === "/api/messages" && request.method === "POST") {
       if (await publicRateLimited(request, env, "messages", 100)) return json({ok:false,error:"Trop d’envois. Réessaie dans une heure."},429);
       const ct = request.headers.get("Content-Type") || "";
-      if (Number(request.headers.get("Content-Length") || 0) > 12 * 1024 * 1024) return json({ok:false,error:"Envoi trop volumineux"},413);
-      // Bound the actual streamed body even when Content-Length is missing or incorrect.
-      const maxBodyBytes = 12 * 1024 * 1024;
-      const reader = request.body?.getReader();
-      if (!reader) return json({ok:false,error:"Corps de requête manquant"},400);
-      const chunks = []; let totalBytes = 0; let tooLarge = false;
-      try {
-        while (true) {
-          const {done,value} = await reader.read();
-          if (done) break;
-          totalBytes += value.byteLength;
-          if (totalBytes > maxBodyBytes) { tooLarge = true; break; }
-          chunks.push(value);
-        }
-      } finally {
-        if (tooLarge) { try { await reader.cancel(); } catch (_) {} }
-        reader.releaseLock();
-      }
-      if (tooLarge) return json({ok:false,error:"Envoi trop volumineux"},413);
-      const bodyBytes = new Uint8Array(totalBytes); let bodyOffset = 0;
-      for (const chunk of chunks) { bodyBytes.set(chunk,bodyOffset); bodyOffset += chunk.byteLength; }
+      if (Number(request.headers.get("Content-Length") || 0) > 51 * 1024 * 1024) return json({ok:false,error:"Envoi trop volumineux"},413);
+      // Parse multipart directly instead of buffering and copying the entire video twice.
+      // Cloudflare's request size cap and the per-file check below remain in force.
       const b = ct.includes("multipart/form-data")
-        ? await new Response(bodyBytes,{headers:{"Content-Type":ct}}).formData()
-        : JSON.parse(new TextDecoder().decode(bodyBytes));
+        ? await request.formData()
+        : await request.json();
       const get = k => b instanceof FormData ? b.get(k) : b[k];
       const prenom = String(get("prenom") || "").trim().slice(0,60);
       const contact = String(get("contact") || "").trim().slice(0,254);
@@ -855,7 +838,8 @@ var worker_default = { async scheduled(event, env) {
       const file = get("attachment");
       let fileId = null, fileName = null, fileType = null, fileSize = null;
       if (file && typeof file === "object" && file.size > 0) {
-        if (file.size > 8*1024*1024 || !attachmentAllowed(file)) return json({ok:false,error:"Type de pièce jointe refusé ou fichier supérieur à 8 Mo."},400);
+        const isVideo = /\.(mp4|mov|webm)$/i.test(String(file.name||""));
+        if (file.size > (isVideo ? 50 : 8)*1024*1024 || !attachmentAllowed(file)) return json({ok:false,error:isVideo?"Vidéo refusée : format non autorisé ou taille supérieure à 50 Mo.":"Pièce jointe refusée : format non autorisé ou taille supérieure à 8 Mo."},400);
         if (!env.B2_KEY_ID || !env.B2_APPLICATION_KEY || !env.B2_BUCKET_ID) return json({ok:false,error:"Stockage B2 non configuré."},503);
         fileId = crypto.randomUUID(); fileName = String(file.name || "fichier").replace(/[\/\\\x00-\x1f]/g,"_").slice(0,180);
         fileType = file.type || "application/octet-stream"; fileSize = file.size;
@@ -1035,7 +1019,7 @@ var worker_default = { async scheduled(event, env) {
       const m=await env.DB.prepare("SELECT id,media_type,original_name FROM published_attachments WHERE id=?").bind(id).first();
       if(!m)return json({ok:false,error:"Fichier introuvable"},404);
       const bytes=await attachmentGet(env,"published/"+id);
-      const safeType=/^(image\/(jpeg|png|webp)|video\/(mp4|webm)|application\/pdf|text\/plain)$/.test(m.media_type)?m.media_type:"application/octet-stream";
+      const safeType=/^(image\/(jpeg|png|webp)|video\/(mp4|webm|quicktime)|application\/pdf|text\/plain)$/.test(m.media_type)?m.media_type:"application/octet-stream";
       const name=String(m.original_name).replace(/[^a-zA-Z0-9._-]/g,"_");
       return new Response(bytes,{headers:headers({"Content-Type":safeType,"Content-Disposition":`inline; filename="${name}"`,"X-Content-Type-Options":"nosniff","Cache-Control":"public, max-age=300","Content-Security-Policy":"default-src 'none'; sandbox"})});
     }
@@ -1145,9 +1129,9 @@ var worker_default = { async scheduled(event, env) {
       const m=await env.DB.prepare("SELECT attachment_file_id,attachment_name,attachment_type,attachment_size FROM messages WHERE id=?").bind(id).first();
       if(!m?.attachment_file_id)return json({ok:false,error:"Pièce jointe introuvable"},404);
       const name=String(m.attachment_name||"fichier"),type=String(m.attachment_type||"");
-      const kind=/^image\/(jpeg|png|webp)$/.test(type)?"photo":/^video\/(mp4|webm)$/.test(type)?"video":/^(application\/pdf|text\/plain)$/.test(type)?"document":null;
+      const kind=/^image\/(jpeg|png|webp)$/.test(type)?"photo":/^video\/(mp4|webm|quicktime)$/.test(type)?"video":/^(application\/pdf|text\/plain)$/.test(type)?"document":null;
       if(!kind)return json({ok:false,error:"Format non publiable"},415);
-      if(Number(m.attachment_size)>8*1024*1024)return json({ok:false,error:"Publication limitée à 8 Mo"},413);
+      if(Number(m.attachment_size)>(kind==="video"?50:8)*1024*1024)return json({ok:false,error:kind==="video"?"Publication limitée à 50 Mo":"Publication limitée à 8 Mo"},413);
       const title=String(b.title||name).trim().slice(0,100);
       if(!title)return json({ok:false,error:"Titre obligatoire"},400);
       const existing=await env.DB.prepare("SELECT id FROM published_attachments WHERE source_message_id=? AND original_name=?").bind(id,name).first();
