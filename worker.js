@@ -822,6 +822,7 @@ var worker_default = { async scheduled(event, env) {
 
     await init(env.DB);
 
+    if(p==="/api/express/identify"&&request.method==="POST"){if(await publicRateLimited(request,env,"express-identify",30))return json({ok:false,error:"Trop de tentatives."},429);const b=await request.json(),value=String(b.contact||"").trim().slice(0,254);const normalized=value.replace(/[^0-9]/g,"").replace(/^33(?=[1-9])/,"0");const found=await env.DB.prepare("SELECT prenom FROM contacts WHERE active=1 AND (lower(trim(email))=lower(?) OR replace(replace(replace(replace(telephone,' ',''),'.',''),'-',''),'+33','0')=?) ORDER BY id DESC LIMIT 1").bind(value,normalized).first();if(!found)return json({ok:false,error:"Contact actif introuvable."},404);return json({ok:true,prenom:found.prenom});}
     if (p === "/api/messages" && request.method === "POST") {
       if (await publicRateLimited(request, env, "messages", 100)) return json({ok:false,error:"Trop d’envois. Réessaie dans une heure."},429);
       const ct = request.headers.get("Content-Type") || "";
@@ -832,11 +833,11 @@ var worker_default = { async scheduled(event, env) {
         ? await request.formData()
         : await request.json();
       const get = k => b instanceof FormData ? b.get(k) : b[k];
-      const prenom = String(get("prenom") || "").trim().slice(0,60);
+      let prenom = String(get("prenom") || "").trim().slice(0,60);
       const contact = String(get("contact") || "").trim().slice(0,254);
       const message = String(get("message") || "").trim().slice(0,1200);
       if (String(get("website") || "").trim()) return json({ok:true});
-      if (!prenom || !message) return json({ok:false,error:"Prénom et message obligatoires."},400);
+      const express=String(get("express")||"")==="1";if(express){const value=contact;const normalized=value.replace(/[^0-9]/g,"").replace(/^33(?=[1-9])/,"0");const found=await env.DB.prepare("SELECT prenom FROM contacts WHERE active=1 AND (lower(trim(email))=lower(?) OR replace(replace(replace(replace(telephone,' ',''),'.',''),'-',''),'+33','0')=?) ORDER BY id DESC LIMIT 1").bind(value,normalized).first();if(!found)return json({ok:false,error:"Contact non actif."},403);prenom=String(found.prenom||"Contact").slice(0,60);if(!get("attachment")||typeof get("attachment")!=="object"||!get("attachment").size)return json({ok:false,error:"Ajoute un fichier."},400);}else if(!prenom||!message)return json({ok:false,error:"Prénom et message obligatoires."},400);
       const file = get("attachment");
       let fileId = null, fileName = null, fileType = null, fileSize = null;
       if (file && typeof file === "object" && file.size > 0) {
