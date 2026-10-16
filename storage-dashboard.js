@@ -2,7 +2,7 @@
   const root = document.getElementById('storageQuota');
   const refresh = document.getElementById('storageRefresh');
   if (!root || !refresh) return;
-  const api = 'https://baleti-sauvage.baletisauvage.workers.dev';
+  const api = location.hostname === 'baleti-admin-secure.baletisauvage.workers.dev' ? location.origin : 'https://baleti-sauvage.baletisauvage.workers.dev';
   let busy = false;
   const bytes = n => {
     if (!Number.isFinite(n)) return 'Non mesuré';
