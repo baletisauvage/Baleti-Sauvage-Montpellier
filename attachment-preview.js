@@ -29,11 +29,11 @@
       currentUrl=URL.createObjectURL(new Blob([bytes],{type}));
       let element;
       if(type.startsWith('image/')){element=document.createElement('img');element.alt=message.attachment_name||'Pièce jointe';}
-      else if(type.startsWith('video/')){element=document.createElement('video');element.controls=true;element.playsInline=true;element.preload='metadata';}
+      else if(type.startsWith('video/')){element=document.createElement('video');element.controls=true;element.playsInline=true;element.preload='auto';element.setAttribute('controlsList','nodownload');element.addEventListener('loadedmetadata',()=>{if(ticket===sequence)status.textContent='Vidéo prête · appuie sur ▶ pour la lire.';});element.addEventListener('error',()=>{if(ticket===sequence)status.textContent='Cette vidéo MP4 utilise probablement un codec non pris en charge par ce navigateur. Clique sur « Télécharger » pour la regarder dans ton lecteur vidéo.';});element.addEventListener('stalled',()=>{if(ticket===sequence)status.textContent='La lecture semble bloquée. Essaie « Télécharger » pour ouvrir la vidéo dans ton lecteur.';});}
       else{element=document.createElement('iframe');element.title='Aperçu PDF : '+(message.attachment_name||'document');element.referrerPolicy='no-referrer';}
-      element.onerror=()=>{if(ticket===sequence)status.textContent='Ce navigateur ne peut pas afficher ce fichier. Le téléchargement reste disponible.';};
+      if(!type.startsWith('video/'))element.onerror=()=>{if(ticket===sequence)status.textContent='Ce navigateur ne peut pas afficher ce fichier. Le téléchargement reste disponible.';};
       element.src=currentUrl;content.appendChild(element);
-      status.textContent=type==='application/pdf'?'PDF · si l’aperçu n’est pas proposé par ton navigateur, utilise « Télécharger ».':'Aperçu privé · aucun fichier enregistré sur ton appareil';
+      status.textContent=type==='application/pdf'?'PDF · si l’aperçu n’est pas proposé par ton navigateur, utilise « Télécharger ».':type.startsWith('video/')?'Préparation de la vidéo… Si elle ne se lit pas, utilise « Télécharger ».':'Aperçu privé · aucun fichier enregistré sur ton appareil';
     }catch(error){if(ticket===sequence&&error.name!=='AbortError')status.textContent=error.message+' Le téléchargement reste disponible.';}
   };
 })();
