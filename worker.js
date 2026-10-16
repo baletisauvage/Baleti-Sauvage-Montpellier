@@ -503,9 +503,10 @@ async function saveVideos(env, v, sha, m) {
 
 __name(saveVideos, "saveVideos");
 
+function chronologicalMedia(items,key){return items.sort((a,b)=>{const x=String(a[key]||"").slice(0,10),y=String(b[key]||"").slice(0,10);return (y?1:0)-(x?1:0)||y.localeCompare(x)})}
 function cleanPaper(x) {
 
-  return { fichier: String(x?.fichier || ""), nomOriginal: String(x?.nomOriginal || ""), titre: String(x?.titre || "").trim().slice(0, 120), visible: x?.visible !== false, taille: Number(x?.taille || 0), ajouteLe: String(x?.ajouteLe || "") };
+  return { fichier: String(x?.fichier || ""), nomOriginal: String(x?.nomOriginal || ""), titre: String(x?.titre || "").trim().slice(0, 120), visible: x?.visible !== false, datePapier: String(x?.datePapier || x?.date || "").slice(0,10), taille: Number(x?.taille || 0), ajouteLe: String(x?.ajouteLe || "") };
 
 }
 
@@ -1003,9 +1004,9 @@ var worker_default = { async scheduled(event, env) {
         const titre = String(item.title || item.original_name || "Sans titre");
         if (item.kind === "photo") photos.push({url,titre,credit:item.credit||"",datePhoto:item.date_media||"",principale:Number(item.principale)===1});
         else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,dateVideo:item.date_media||"",principale:Number(item.principale)===1});
-        else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document")});
+        else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document"),datePapier:item.date_media||"",credit:item.credit||""});
       }
-      return json({ok:true,settings:s,overrides:o,photos,videos,papers},200,{"Cache-Control":"no-store"});
+      return json({ok:true,settings:s,overrides:o,photos:chronologicalMedia(photos,"datePhoto"),videos:chronologicalMedia(videos,"dateVideo"),papers:chronologicalMedia(papers,"datePapier")},200,{"Cache-Control":"no-store"});
 
     }
 
@@ -1105,7 +1106,7 @@ var worker_default = { async scheduled(event, env) {
       // Les operations d'ecriture GitHub restent bloquees par gh() sans secret.
       const [s, o, l, ph, vi, ms, pa] = await Promise.all([settings(env.DB), overrides(env.DB), locations(env.DB), env.GITHUB_TOKEN ? photoData(env) : Promise.resolve({photos:[]}), env.GITHUB_TOKEN ? videoData(env) : Promise.resolve({videos:[]}), messages(env.DB), env.GITHUB_TOKEN ? paperData(env) : Promise.resolve({papers:[]})]);
 
-      return json({ ok: true, settings: s, overrides: o, locations: l, photos: ph.photos.map(photoPublic), videos: vi.videos, messages: ms, contacts: await contacts(env.DB), papers: pa.papers.map(paperPublic) });
+      return json({ ok: true, settings: s, overrides: o, locations: l, photos: chronologicalMedia(ph.photos.map(photoPublic),"datePhoto"), videos: chronologicalMedia(vi.videos,"dateVideo"), messages: ms, contacts: await contacts(env.DB), papers: chronologicalMedia(pa.papers.map(paperPublic),"datePapier") });
 
     }
 
