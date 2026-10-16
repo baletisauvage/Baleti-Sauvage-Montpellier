@@ -176,8 +176,8 @@ __name(signature, "signature");
 
 async function auth(req, env) {
   const m = (req.headers.get("Cookie") || "").match(/(?:^|;\s*)baleti_admin=([^;]+)/);
-  if (!env.DB) return false;
-  const token = m?.[1] || req.headers.get("X-Admin-Token") || "";
+  if (!m || !env.DB) return false;
+  const token = m[1];
   if (!/^[a-f0-9]{64}$/.test(token)) return false;
   const tokenHash = await hash(token);
   const row = await env.DB.prepare("SELECT expires_at FROM admin_sessions WHERE token_hash=?").bind(tokenHash).first();
@@ -1028,7 +1028,7 @@ var worker_default = { async scheduled(event, env) {
       const token = [...crypto.getRandomValues(new Uint8Array(32))].map(x => x.toString(16).padStart(2,"0")).join("");
       const now = Math.floor(Date.now()/1000);
       await env.DB.prepare("INSERT INTO admin_sessions(token_hash,expires_at,created_at) VALUES(?,?,?)").bind(await hash(token),now+SESSION,now).run();
-      return json({ ok: true, token }, 200, { "Set-Cookie": `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${SESSION}` });
+      return json({ ok: true }, 200, { "Set-Cookie": `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${SESSION}` });
 
     }
 
