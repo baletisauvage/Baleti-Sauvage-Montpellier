@@ -1153,7 +1153,7 @@ var worker_default = { async scheduled(event, env) {
       if(!/^[a-f0-9-]{36}$/.test(id))return json({ok:false,error:"Identifiant invalide"},400);
       const title=String(b.title||"").trim().slice(0,120),date=String(b.date_media||"").trim(),credit=String(b.credit||"").trim().slice(0,160);
       if(!title)return json({ok:false,error:"Titre obligatoire"},400);
-      if(date&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))return json({ok:false,error:"Date invalide"},400);
+      if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))return json({ok:false,error:"Date invalide"},400);
       const old=await env.DB.prepare("SELECT id FROM published_attachments WHERE id=?").bind(id).first();
       if(!old)return json({ok:false,error:"Publication introuvable"},404);
       await env.DB.prepare("UPDATE published_attachments SET title=?,date_media=?,credit=?,visible=?,principale=? WHERE id=?").bind(title,date,credit,b.visible===false?0:1,b.principale===true?1:0,id).run();
