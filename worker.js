@@ -203,6 +203,7 @@ async function init(DB) {
 
   await DB.prepare("CREATE TABLE IF NOT EXISTS published_attachments (id TEXT PRIMARY KEY, source_message_id INTEGER, original_name TEXT NOT NULL, media_type TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
   await DB.prepare("CREATE INDEX IF NOT EXISTS idx_published_message ON published_attachments(source_message_id)").run();
+  await ensureColumns(DB, "published_attachments", {date_media:"TEXT DEFAULT ''",credit:"TEXT DEFAULT ''",visible:"INTEGER NOT NULL DEFAULT 1",principale:"INTEGER NOT NULL DEFAULT 0"});
   await DB.prepare("CREATE TABLE IF NOT EXISTS github_cleanup_queue (path TEXT PRIMARY KEY, sha TEXT NOT NULL, kind TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
 
   await ensureColumns(DB, "event_overrides", { time: "TEXT", place: "TEXT", lat: "REAL", lng: "REAL", comment: "TEXT DEFAULT ''", cancelled: "INTEGER NOT NULL DEFAULT 0", updated_at: "TEXT" });
@@ -985,7 +986,7 @@ var worker_default = { async scheduled(event, env) {
       // These rows are independent of their source messages and survive message deletion.
       let published = [];
       try {
-        published = (await env.DB.prepare("SELECT id,original_name,kind,title FROM published_attachments ORDER BY published_at DESC").all()).results || [];
+        published = (await env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all()).results || [];
       } catch (error) {
         console.error("Published gallery metadata unavailable", error);
         return json({ok:false,error:"Publications temporairement indisponibles"},503,{"Cache-Control":"no-store"});
@@ -1000,8 +1001,8 @@ var worker_default = { async scheduled(event, env) {
         if (!item?.id) continue;
         const url = `${API_ORIGIN}/api/published/file?id=${encodeURIComponent(item.id)}`;
         const titre = String(item.title || item.original_name || "Sans titre");
-        if (item.kind === "photo") photos.push({url,titre,credit:""});
-        else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,principale:false});
+        if (item.kind === "photo") photos.push({url,titre,credit:item.credit||"",datePhoto:item.date_media||"",principale:Number(item.principale)===1});
+        else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,dateVideo:item.date_media||"",principale:Number(item.principale)===1});
         else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document")});
       }
       return json({ok:true,settings:s,overrides:o,photos,videos,papers},200,{"Cache-Control":"no-store"});
@@ -1146,6 +1147,17 @@ var worker_default = { async scheduled(event, env) {
     if(p==="/api/published/admin"&&request.method==="GET"){
       const rows=(await env.DB.prepare("SELECT * FROM published_attachments ORDER BY published_at DESC").all()).results||[];
       return json({ok:true,items:rows});
+    }
+    if(p==="/api/published/update"&&request.method==="POST"){
+      const b=await request.json(),id=String(b.id||"");
+      if(!/^[a-f0-9-]{36}$/.test(id))return json({ok:false,error:"Identifiant invalide"},400);
+      const title=String(b.title||"").trim().slice(0,120),date=String(b.date_media||"").trim(),credit=String(b.credit||"").trim().slice(0,160);
+      if(!title)return json({ok:false,error:"Titre obligatoire"},400);
+      if(date&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))return json({ok:false,error:"Date invalide"},400);
+      const old=await env.DB.prepare("SELECT id FROM published_attachments WHERE id=?").bind(id).first();
+      if(!old)return json({ok:false,error:"Publication introuvable"},404);
+      await env.DB.prepare("UPDATE published_attachments SET title=?,date_media=?,credit=?,visible=?,principale=? WHERE id=?").bind(title,date,credit,b.visible===false?0:1,b.principale===true?1:0,id).run();
+      return json({ok:true});
     }
     if(p==="/api/published/delete"&&request.method==="POST"){
       const b=await request.json();if(!/^[a-f0-9-]{36}$/.test(String(b.id||"")))return json({ok:false,error:"ID invalide"},400);
