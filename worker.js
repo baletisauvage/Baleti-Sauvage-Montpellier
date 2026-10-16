@@ -503,7 +503,7 @@ async function saveVideos(env, v, sha, m) {
 
 __name(saveVideos, "saveVideos");
 
-function chronologicalMedia(items,key){return items.sort((a,b)=>{const x=String(a[key]||"").slice(0,10),y=String(b[key]||"").slice(0,10);return (y?1:0)-(x?1:0)||y.localeCompare(x)})}
+function chronologicalMedia(items,key){return items.sort((a,b)=>{const when=o=>String(o[key]||o.date_media||o.ajouteLe||o.published_at||'').trim();const x=when(a),y=when(b);return y.localeCompare(x)})}
 function cleanPaper(x) {
 
   return { fichier: String(x?.fichier || ""), nomOriginal: String(x?.nomOriginal || ""), titre: String(x?.titre || "").trim().slice(0, 120), visible: x?.visible !== false, datePapier: String(x?.datePapier || x?.date || "").slice(0,10), taille: Number(x?.taille || 0), ajouteLe: String(x?.ajouteLe || "") };
@@ -1002,9 +1002,9 @@ var worker_default = { async scheduled(event, env) {
         if (!item?.id) continue;
         const url = `${API_ORIGIN}/api/published/file?id=${encodeURIComponent(item.id)}`;
         const titre = String(item.title || item.original_name || "Sans titre");
-        if (item.kind === "photo") photos.push({url,titre,credit:item.credit||"",datePhoto:item.date_media||"",principale:Number(item.principale)===1});
-        else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,dateVideo:item.date_media||"",principale:Number(item.principale)===1});
-        else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document"),datePapier:item.date_media||"",credit:item.credit||""});
+        if (item.kind === "photo") photos.push({url,titre,credit:item.credit||"",datePhoto:item.date_media||"",published_at:item.published_at||"",principale:Number(item.principale)===1});
+        else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,dateVideo:item.date_media||"",published_at:item.published_at||"",principale:Number(item.principale)===1});
+        else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document"),datePapier:item.date_media||"",published_at:item.published_at||"",credit:item.credit||""});
       }
       return json({ok:true,settings:s,overrides:o,photos:chronologicalMedia(photos,"datePhoto"),videos:chronologicalMedia(videos,"dateVideo"),papers:chronologicalMedia(papers,"datePapier")},200,{"Cache-Control":"no-store"});
 
