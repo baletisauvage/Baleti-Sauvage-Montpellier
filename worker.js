@@ -201,6 +201,7 @@ async function init(DB) {
 
   await DB.batch([DB.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS event_overrides (event_date TEXT PRIMARY KEY,time TEXT,place TEXT,lat REAL,lng REAL,comment TEXT DEFAULT '',cancelled INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS locations (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,lat REAL,lng REAL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_login_rate (key TEXT PRIMARY KEY,failures INTEGER NOT NULL DEFAULT 0,first_failure INTEGER NOT NULL,last_failure INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,prenom TEXT NOT NULL,contact TEXT DEFAULT '',message TEXT NOT NULL,date_creation TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,lu INTEGER NOT NULL DEFAULT 0)"), DB.prepare("CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, prenom TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', telephone TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), DB.prepare("CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS public_request_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS unsubscribe_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"), DB.prepare("CREATE TABLE IF NOT EXISTS contact_optin_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, prenom TEXT NOT NULL, telephone TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)")]);
 
+  await ensureColumns(DB, "contacts", {approval_status:"TEXT NOT NULL DEFAULT 'approved'"});
   await DB.prepare("CREATE TABLE IF NOT EXISTS published_attachments (id TEXT PRIMARY KEY, source_message_id INTEGER, original_name TEXT NOT NULL, media_type TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
   await DB.prepare("CREATE INDEX IF NOT EXISTS idx_published_message ON published_attachments(source_message_id)").run();
   await ensureColumns(DB, "published_attachments", {date_media:"TEXT DEFAULT ''",credit:"TEXT DEFAULT ''",visible:"INTEGER NOT NULL DEFAULT 1",principale:"INTEGER NOT NULL DEFAULT 0"});
@@ -685,7 +686,7 @@ function coordsOK(lat, lng) {
     Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && Math.abs(Number(lat)) <= 90 && Math.abs(Number(lng)) <= 180;
 }
 async function contacts(DB) {
-  return (await DB.prepare("SELECT id,prenom,email,telephone,active,created_at,updated_at FROM contacts ORDER BY id DESC LIMIT 2000").all()).results || [];
+  return (await DB.prepare("SELECT id,prenom,email,telephone,active,approval_status,created_at,updated_at FROM contacts ORDER BY id DESC LIMIT 2000").all()).results || [];
 }
 function contactPayload(b) {
   const prenom = String(b.prenom || "").trim().slice(0, 60);
@@ -857,36 +858,12 @@ var worker_default = { async scheduled(event, env) {
     }
     // Explicit direct-consent mode; email confirmation remains the default.
     if (p === "/api/contacts" && request.method === "POST") {
-      if (await publicRateLimited(request, env, "contacts")) return json({ok:false,error:"Trop de demandes. Réessaie dans une heure."},429);
-      const b = await request.json(), c = contactPayload(b);
-      if (!c || b.consent !== true) return json({ok:false,error:"Prénom et au moins un e-mail ou téléphone valide obligatoires."},400);
-      if (!c.email) {
-        await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active) SELECT ?,'',?,1,1 WHERE NOT EXISTS(SELECT 1 FROM contacts WHERE telephone=? AND email='')").bind(c.prenom,c.telephone,c.telephone).run();
-        return json({ok:true,message:"Coordonnées enregistrées."});
-      }
-      if (env.CONTACT_OPTIN_MODE === "direct") {
-        // Atomic insert only: public requests cannot edit or reactivate existing contacts.
-        await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active) SELECT ?,?,?,1,1 WHERE NOT EXISTS(SELECT 1 FROM contacts WHERE email=?)")
-          .bind(c.prenom,c.email,c.telephone,c.email).run();
-        return json({ok:true,message:"Demande enregistrée. Si tu étais déjà désinscrit, contacte l’équipe pour te réinscrire."});
-      }
-      if (!env.RESEND_API_KEY || !env.UNSUBSCRIBE_FROM_EMAIL) return json({ok:false,error:"Confirmation par email indisponible pour le moment."},503);
-      const existing = await env.DB.prepare("SELECT id,active FROM contacts WHERE email=? ORDER BY id DESC LIMIT 1").bind(c.email).first();
-      // Same outward response for an already-active subscriber, without revealing status.
-      if (!existing || !Number(existing.active)) {
-        const token = [...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,"0")).join("");
-        const tokenHash = await hash(token), now = Math.floor(Date.now()/1000);
-        await env.DB.prepare("INSERT INTO contact_optin_tokens(token_hash,email,prenom,telephone,expires_at,created_at) VALUES(?,?,?,?,?,?)").bind(tokenHash,c.email,c.prenom,c.telephone,now+1800,now).run();
-        const endpoint = new URL(request.url).origin + "/api/contacts/confirm?token=" + encodeURIComponent(token);
-        let mail;
-        try { mail = await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({from:env.UNSUBSCRIBE_FROM_EMAIL,to:[c.email],subject:"Confirmer votre inscription — Balèti Sauvage",text:"Pour confirmer votre inscription, ouvrez ce lien dans les 30 minutes :\n"+endpoint+"\n\nSi vous n'avez rien demandé, ignorez cet email."})}); }
-        catch(e) { await env.DB.prepare("DELETE FROM contact_optin_tokens WHERE token_hash=?").bind(tokenHash).run(); return json({ok:false,error:"Impossible d'envoyer la confirmation actuellement."},503); }
-        if (!mail.ok) { await env.DB.prepare("DELETE FROM contact_optin_tokens WHERE token_hash=?").bind(tokenHash).run(); return json({ok:false,error:"Impossible d'envoyer la confirmation actuellement."},503); }
-        // Only retire older links after Resend accepts the new message.
-        // A cleanup failure must not invalidate the newly sent link.
-        try { await env.DB.prepare("DELETE FROM contact_optin_tokens WHERE expires_at<?").bind(now).run(); } catch(e) { console.error("Opt-in token cleanup failed",e); }
-      }
-      return json({ok:true,message:"Si cette adresse peut être inscrite, un email de confirmation sera envoyé."});
+      if(await publicRateLimited(request,env,"contacts"))return json({ok:false,error:"Trop de demandes. Réessaie dans une heure."},429);
+      const b=await request.json(),c=contactPayload(b);
+      if(!c||b.consent!==true)return json({ok:false,error:"Prénom et au moins un e-mail ou téléphone valide obligatoires."},400);
+      const exists=await env.DB.prepare("SELECT id,approval_status FROM contacts WHERE (email<>'' AND email=?) OR (telephone<>'' AND telephone=?) ORDER BY id DESC LIMIT 1").bind(c.email,c.telephone).first();
+      if(!exists)await env.DB.prepare("INSERT INTO contacts(prenom,email,telephone,consent,active,approval_status) VALUES(?,?,?,1,0,'pending')").bind(c.prenom,c.email,c.telephone).run();
+      return json({ok:true,message:"Demande enregistrée. Elle sera examinée par l’administration."});
     }
     if (p === "/api/contacts/confirm" && (request.method === "GET" || request.method === "POST")) {
       const secureHeaders = {"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store, max-age=0","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff","Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
@@ -1111,6 +1088,8 @@ var worker_default = { async scheduled(event, env) {
 
     }
 
+    if(p==="/api/contacts/approve"&&request.method==="POST"){const b=await request.json(),id=Number(b.id);if(!Number.isSafeInteger(id)||id<1)return json({ok:false,error:"Identifiant invalide"},400);await env.DB.prepare("UPDATE contacts SET active=1,approval_status='approved',updated_at=CURRENT_TIMESTAMP WHERE id=? AND approval_status='pending'").bind(id).run();return json({ok:true,contacts:await contacts(env.DB)});}
+    if(p==="/api/contacts/reject"&&request.method==="POST"){const b=await request.json(),id=Number(b.id);if(!Number.isSafeInteger(id)||id<1)return json({ok:false,error:"Identifiant invalide"},400);await env.DB.prepare("UPDATE contacts SET active=0,approval_status='rejected',updated_at=CURRENT_TIMESTAMP WHERE id=? AND approval_status='pending'").bind(id).run();return json({ok:true,contacts:await contacts(env.DB)});}
     if (p === "/api/contacts/deactivate" && request.method === "POST") {
       const b = await request.json();
       const ids = Array.isArray(b.contacts) ? b.contacts : [b.id];
