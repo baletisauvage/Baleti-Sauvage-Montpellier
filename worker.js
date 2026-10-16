@@ -503,7 +503,7 @@ async function saveVideos(env, v, sha, m) {
 
 __name(saveVideos, "saveVideos");
 
-function chronologicalMedia(items,key){return items.sort((a,b)=>{const when=o=>String(o[key]||o.date_media||o.ajouteLe||o.published_at||'').trim();const x=when(a),y=when(b);return y.localeCompare(x)})}
+function chronologicalMedia(items,key){return items.sort((a,b)=>{const when=o=>String(o[key]||o.date_media||o.ajouteLe||o.published_at||'').trim();const norm=o=>{const raw=when(o).replace(' ','T');return /^\\d{4}-\\d{2}-\\d{2}$/.test(raw)?raw+'T00:00:00':raw};return norm(b).localeCompare(norm(a))})}
 function cleanPaper(x) {
 
   return { fichier: String(x?.fichier || ""), nomOriginal: String(x?.nomOriginal || ""), titre: String(x?.titre || "").trim().slice(0, 120), visible: x?.visible !== false, datePapier: String(x?.datePapier || x?.date || "").slice(0,10), taille: Number(x?.taille || 0), ajouteLe: String(x?.ajouteLe || "") };
