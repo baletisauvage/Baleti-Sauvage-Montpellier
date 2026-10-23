@@ -4,25 +4,28 @@
 <div class="storage-box"><strong class="title">Site · GitHub Pages</strong><div class="storage-line"><span>Code et fichiers du site</span><strong>GitHub</strong></div><div class="storage-line"><span>Pages publiques et administration</span><strong>GitHub Pages</strong></div><div class="storage-line"><span>Fonds, boutons et icônes</span><strong>GitHub</strong></div><small>Les originaux des médias migrés restent conservés sur GitHub pour le retour arrière. Les nouveaux fichiers de galerie sont envoyés sur B2.</small></div>
 <div class="storage-box"><strong class="title">Vidéos externes · YouTube</strong><div class="storage-line"><span>Liens YouTube intégrés</span><strong id="storageYoutube">Chargement…</strong></div><small>Seules les vidéos ajoutées par lien YouTube sont hébergées sur YouTube. Les fichiers vidéo téléversés sont comptés dans Backblaze B2.</small></div>
 </div></section><section class="card"><h2>Espace utilisé et marge gratuite</h2><button type="button" id="storageRefresh">Actualiser les mesures</button><p id="storageQuotaStatus" role="status" aria-live="polite">Les mesures se chargeront après connexion.</p><div id="storageQuota" class="storage-grid"></div><small>Seuils vérifiés le 15 octobre 2026 · stockage uniquement. Les requêtes et les transferts ont leurs propres limites. Ces alertes ne bloquent pas les envois et ne constituent pas un plafond de facturation.</small><p><a href="https://www.backblaze.com/cloud-storage/pricing" target="_blank" rel="noopener">Quota B2</a> · <a href="https://developers.cloudflare.com/d1/platform/limits/" target="_blank" rel="noopener">Limites D1</a> · <a href="https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits" target="_blank" rel="noopener">Limites GitHub Pages</a></p></section></div><div class="status" id="msg"></div></div></main><script>const API='https://baleti-sauvage.baletisauvage.workers.dev',$=id=>document.getElementById(id);async function call(p,o={}){const r=await fetch(API+p,{credentials:'include',...o}),t=await r.text();let j;try{j=JSON.parse(t)}catch{throw Error('Réponse Worker invalide')}if(!r.ok)throw Error(j.error||j.detail||('HTTP '+r.status));return j}const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));function nextDate(mode){let n=new Date(),d=new Date(n),day=mode==='sun'?0:4;d.setHours(mode==='sun'?14:21,mode==='sun'?0:30,0,0);let x=(day-d.getDay()+7)%7;if(!x&&d<=n)x=7;d.setDate(d.getDate()+x);return d}function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function parisTimestamp(date,time){const m=/^(\\d{1,2}):(\\d{2})/.exec(String(time||''));if(!m)return NaN;const [y,mo,d]=date.split('-').map(Number),h=+m[1],min=+m[2];if(h>23||min>59)return NaN;const target=Date.UTC(y,mo-1,d,h,min);let guess=target;const fmt=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});for(let i=0;i<3;i++){const p=fmt.formatToParts(new Date(guess)),v=k=>+p.find(x=>x.type===k).value;guess+=target-Date.UTC(v('year'),v('month')-1,v('day'),v('hour'),v('minute'))}return guess}
 async function load(){
   const data = await call('/api/admin');
   const s = data.settings || {};
-  
-  let d, time, place;
-  
-  // Utilisation des données du Worker si elles existent (nextEvent)
-  if (data.nextEvent) {
-    d = new Date(data.nextEvent.date + 'T12:00:00Z');
-    time = data.nextEvent.time.replace(':', 'h');
-    place = data.nextEvent.place;
-  } else {
-    d = nextDate(s.mode);
-    const o = (data.overrides || []).find(x => x.event_date === iso(d));
-    time = o?.time || (s.mode === 'sun' ? '14h00' : '21h30');
-    place = o?.place || s.usualPlace || '';
+  const now=Date.now(),standardTime=s.mode==='sun'?'14:00':'21:30';
+  const activeOverride=(data.overrides||[])
+    .filter(o=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(o.event_date||'')))
+    .map(o=>({...o,_start:parisTimestamp(o.event_date,o.time||standardTime)}))
+    .filter(o=>Number.isFinite(o._start)&&o._start+4*3600000>=now)
+    .sort((a,b)=>a.event_date.localeCompare(b.event_date)||a._start-b._start)[0];
+  let d,time,place;
+  if(activeOverride){
+    d=new Date(activeOverride.event_date+'T12:00:00Z');
+    time=(activeOverride.time||standardTime).replace(':','h');
+    place=activeOverride.place||s.usualPlace||'';
+  }else{
+    d=nextDate(s.mode);
+    time=standardTime.replace(':','h');
+    place=s.usualPlace||'';
   }
   
-  const dateText = new Intl.DateTimeFormat('fr-FR', {weekday:'long',day:'numeric',month:'long'}).format(d);
+  const dateText = new Intl.DateTimeFormat('fr-FR', {weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Paris'}).format(d);
   
   $('summary').innerHTML='<strong>PROCHAIN BALÈTI</strong><br>'+esc(dateText)+' — '+esc(time)+' — '+esc(place)+'<br><small>'+((data.messages||[]).filter(m=>!Number(m.lu)).length)+' nouveau(x) message(s)</small>';
   
