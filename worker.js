@@ -976,7 +976,8 @@ var worker_default = { async scheduled(event, env) {
       const papers = pa.papers.filter(x => x.visible).map(paperPublic);
       // V7.1 only: use B2 for existing gallery assets without changing GitHub manifests.
       const mediaUrl=(kind,file)=>API_ORIGIN+'/api/media/file?kind='+encodeURIComponent(kind)+'&file='+encodeURIComponent(file);
-      for(const [kind,items] of [['photos',photos],['videos',videos],['papiers',papers]]){for(const item of items){if(!item.fichier)continue;const idx=await env.DB.prepare('SELECT b2_file_id FROM b2_file_index WHERE logical_key=?').bind('media:'+kind+':'+item.fichier).first();if(idx)item.url=mediaUrl(kind,item.fichier);}}
+      // Resolve media indexes concurrently instead of waiting for each D1 query in sequence.
+      await Promise.all([['photos',photos],['videos',videos],['papiers',papers]].flatMap(([kind,items])=>items.filter(item=>item.fichier).map(async item=>{const idx=await env.DB.prepare('SELECT b2_file_id FROM b2_file_index WHERE logical_key=?').bind('media:'+kind+':'+item.fichier).first();if(idx)item.url=mediaUrl(kind,item.fichier);})));
       for (const item of published) {
         if (!item?.id) continue;
         const url = `${API_ORIGIN}/api/published/file?id=${encodeURIComponent(item.id)}`;
