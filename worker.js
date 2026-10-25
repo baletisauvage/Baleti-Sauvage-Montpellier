@@ -954,22 +954,18 @@ var worker_default = { async scheduled(event, env) {
 
       // Phase 24: do not silently turn an upstream GitHub failure into empty galleries.
       // An explicit 503 allows the public site to distinguish outage from no content.
-      let s, o, ph, vi, pa;
+      let s, o, ph, vi, pa, published = [];
       try {
-        [s, o, ph, vi, pa] = await Promise.all([settings(env.DB), overrides(env.DB), ...(env.GITHUB_TOKEN ? [photoData(env), videoData(env), paperData(env)] : [Promise.resolve({photos:[]}), Promise.resolve({videos:[]}), Promise.resolve({papers:[]})])]);
+        // Run independent D1 reads alongside settings and gallery-manifest reads.
+        [s, o, ph, vi, pa, published] = await Promise.all([
+          settings(env.DB),
+          overrides(env.DB),
+          ...(env.GITHUB_TOKEN ? [photoData(env), videoData(env), paperData(env)] : [Promise.resolve({photos:[]}), Promise.resolve({videos:[]}), Promise.resolve({papers:[]})]),
+          env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale,published_at FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all().then(r => r.results || [])
+        ]);
       } catch (error) {
-        console.error("Public media unavailable", error);
-        return json({ok:false,error:"Les galeries sont temporairement indisponibles. Réessaie plus tard."},503,{"Cache-Control":"no-store"});
-      }
-
-      // STAGING V7.1: integrate independently published attachments into existing galleries.
-      // These rows are independent of their source messages and survive message deletion.
-      let published = [];
-      try {
-        published = (await env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale,published_at FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all()).results || [];
-      } catch (error) {
-        console.error("Published gallery metadata unavailable", error);
-        return json({ok:false,error:"Publications temporairement indisponibles"},503,{"Cache-Control":"no-store"});
+        console.error("Public data unavailable", error);
+        return json({ok:false,error:"Les données publiques sont temporairement indisponibles. Réessaie plus tard."},503,{"Cache-Control":"no-store"});
       }
       const photos = ph.photos.filter(x => x.visible).map(photoPublic);
       const videos = vi.videos.filter(x => x.visible);
