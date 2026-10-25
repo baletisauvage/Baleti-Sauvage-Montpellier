@@ -955,14 +955,18 @@ var worker_default = { async scheduled(event, env) {
       // Phase 24: do not silently turn an upstream GitHub failure into empty galleries.
       // An explicit 503 allows the public site to distinguish outage from no content.
       let s, o, ph, vi, pa, published = [];
+      const publicTiming = { totalStart: performance.now() };
       try {
-        // Run independent D1 reads alongside settings and gallery-manifest reads.
-        [s, o, ph, vi, pa, published] = await Promise.all([
+        // Mesure du bloc de lectures indépendantes pour isoler la latence de /api/public.
+        const readStart = performance.now();
+        const reads = await Promise.all([
           settings(env.DB),
           overrides(env.DB),
           ...(env.GITHUB_TOKEN ? [photoData(env), videoData(env), paperData(env)] : [Promise.resolve({photos:[]}), Promise.resolve({videos:[]}), Promise.resolve({papers:[]})]),
           env.DB.prepare("SELECT id,original_name,kind,title,date_media,credit,visible,principale,published_at FROM published_attachments WHERE visible=1 ORDER BY published_at DESC").all().then(r => r.results || [])
         ]);
+        [s, o, ph, vi, pa, published] = reads;
+        publicTiming.parallelReadsMs = Math.round(performance.now() - readStart);
       } catch (error) {
         console.error("Public data unavailable", error);
         return json({ok:false,error:"Les données publiques sont temporairement indisponibles. Réessaie plus tard."},503,{"Cache-Control":"no-store"});
@@ -972,8 +976,12 @@ var worker_default = { async scheduled(event, env) {
       const papers = pa.papers.filter(x => x.visible).map(paperPublic);
       // V7.1 only: use B2 for existing gallery assets without changing GitHub manifests.
       const mediaUrl=(kind,file)=>API_ORIGIN+'/api/media/file?kind='+encodeURIComponent(kind)+'&file='+encodeURIComponent(file);
-      // Resolve media indexes concurrently instead of waiting for each D1 query in sequence.
-      await Promise.all([['photos',photos],['videos',videos],['papiers',papers]].flatMap(([kind,items])=>items.filter(item=>item.fichier).map(async item=>{const idx=await env.DB.prepare('SELECT b2_file_id FROM b2_file_index WHERE logical_key=?').bind('media:'+kind+':'+item.fichier).first();if(idx)item.url=mediaUrl(kind,item.fichier);})));
+      // Mesure des recherches D1 d'index média, lancées en parallèle.
+      const indexStart = performance.now();
+      const mediaIndexItems = [['photos',photos],['videos',videos],['papiers',papers]].flatMap(([kind,items])=>items.filter(item=>item.fichier).map(async item=>{const idx=await env.DB.prepare('SELECT b2_file_id FROM b2_file_index WHERE logical_key=?').bind('media:'+kind+':'+item.fichier).first();if(idx)item.url=mediaUrl(kind,item.fichier);}));
+      publicTiming.mediaIndexLookups = mediaIndexItems.length;
+      await Promise.all(mediaIndexItems);
+      publicTiming.mediaIndexMs = Math.round(performance.now() - indexStart);
       for (const item of published) {
         if (!item?.id) continue;
         const url = `${API_ORIGIN}/api/published/file?id=${encodeURIComponent(item.id)}`;
@@ -982,6 +990,8 @@ var worker_default = { async scheduled(event, env) {
         else if (item.kind === "video") videos.push({url,titre,fichier:`publication-${item.id}`,dateVideo:item.date_media||"",published_at:item.published_at||"",principale:Number(item.principale)===1});
         else if (item.kind === "document") papers.push({url,titre,nomOriginal:String(item.original_name || "document"),datePapier:item.date_media||"",published_at:item.published_at||"",credit:item.credit||""});
       }
+      publicTiming.totalMs = Math.round(performance.now() - publicTiming.totalStart);
+      console.log("api_public_timing", JSON.stringify({...publicTiming, photos:photos.length, videos:videos.length, papers:papers.length, published:published.length}));
       return json({ok:true,settings:s,overrides:o,photos:chronologicalMedia(photos,"datePhoto"),videos:chronologicalMedia(videos,"dateVideo"),papers:chronologicalMedia(papers,"datePapier")},200,{"Cache-Control":"no-store"});
 
     }
