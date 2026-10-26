@@ -251,7 +251,7 @@ return '<article class="event-announcement '+(cancelled?'event-cancelled':modifi
  if(!ctx||!button)return;
  const photo=new Image(); photo.src='assets/baleti-sauvage.jpg';
  let start=performance.now(),w=1,h=1,dpr=1,sphereCanvas,sphereCtx,textureReady=false,sourceCanvas,sourceCtx,sourcePixels=null;
- const phrase='BALÈTI SAUVAGE MONTPELLIER · cliquez ici 👉 · '; const glyphs=[...phrase]; const italicStart=phrase.indexOf('cliquez ici'); const italicEnd=italicStart+'cliquez ici'.length;
+ const phrase='BALÈTI SAUVAGE MONTPELLIER · cliquez ici 👉 '; const glyphs=[...phrase]; const italicStart=phrase.indexOf('cliquez ici'); const italicEnd=italicStart+'cliquez ici'.length;
  const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
  function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,1.15);w=Math.max(1,r.width);h=Math.max(1,r.height);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);const n=Math.max(210,Math.min(270,Math.round(Math.min(w,h)*.36)));sphereCanvas=document.createElement('canvas');sphereCanvas.width=n;sphereCanvas.height=n;sphereCtx=sphereCanvas.getContext('2d',{willReadFrequently:true});textureReady=false;if(photo.complete&&photo.naturalWidth)prepareSource();}
  if(window.ResizeObserver)new ResizeObserver(resize).observe(canvas);window.addEventListener('resize',resize);resize();
